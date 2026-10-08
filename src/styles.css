@@ -1,0 +1,262 @@
+:root {
+  --acento: #ff6a1a;
+  --acento-suave: #fff1e8;
+  --ok: #17a34a;
+  --error: #dc2626;
+  --texto: #1c1c1e;
+  --gris: #6b7280;
+  --borde: #e5e7eb;
+  --fondo: #f6f7f9;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: var(--texto);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--fondo); }
+button { font: inherit; cursor: pointer; border: 1px solid var(--borde); background: #fff; border-radius: 8px; padding: 8px 12px; }
+button:disabled { opacity: 0.5; cursor: default; }
+button.activo { background: var(--texto); color: #fff; border-color: var(--texto); }
+button.primario { background: var(--acento); color: #fff; border-color: var(--acento); font-weight: 600; }
+button.secundario { background: transparent; }
+button.peligro { color: var(--error); }
+input, select { font: inherit; padding: 8px 10px; border: 1px solid var(--borde); border-radius: 8px; background: #fff; }
+s { color: var(--gris); margin-right: 6px; font-weight: 400; }
+.badge { display: inline-block; background: var(--acento-suave); color: var(--acento); font-size: 0.75em; font-weight: 600; padding: 2px 8px; border-radius: 999px; margin-left: 8px; }
+.badge.gris { background: var(--fondo); color: var(--gris); }
+.aviso { padding: 8px 12px; border-radius: 8px; font-size: 0.9em; }
+.aviso.error { background: #fee2e2; color: var(--error); }
+.aviso.pendiente { background: #fef3c7; color: #78350f; line-height: 1.5; }
+.cobranza-manual { text-align: left; margin-top: 16px; }
+.cobranza-manual fieldset { border: 0; padding: 0; min-width: 0; }
+.pago-manual { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin: 12px 0; display: grid; gap: 8px; }
+.pago-manual label { display: grid; gap: 4px; }
+.pago-manual input, .pago-manual select { width: 100%; min-width: 0; }
+.historial-facturas { overflow-x: auto; margin-top: 16px; }
+.historial-facturas table { width: 100%; border-collapse: collapse; text-align: left; }
+.historial-facturas th, .historial-facturas td { padding: 12px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+.aviso.prueba { background: #fef3c7; color: #92400e; text-align: center; font-weight: 600; }
+.vacio { color: var(--gris); text-align: center; padding: 24px; }
+.cargando { padding: 48px; text-align: center; color: var(--gris); }
+
+.inicio { display: flex; flex-direction: column; gap: 12px; max-width: 360px; margin: 80px auto; }
+.inicio a { padding: 14px; background: #fff; border-radius: 10px; border: 1px solid var(--borde); color: var(--texto); text-decoration: none; }
+
+/* ---------------- Vendedor ---------------- */
+.vendedor { display: flex; flex-direction: column; height: 100vh; }
+.vendedor > .aviso { border-radius: 0; }
+.cuerpo { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 460px; }
+.catalogo { display: flex; flex-direction: column; padding: 16px; gap: 12px; overflow: hidden; }
+.buscador { font-size: 1.2em; padding: 12px 16px; }
+.rubros { display: flex; flex-wrap: wrap; gap: 6px; }
+.rubros button { padding: 6px 12px; font-size: 0.9em; }
+.grilla { flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; align-content: start; }
+.producto { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 10px; justify-content: space-between; }
+.producto .foto { height: 96px; display: flex; align-items: center; justify-content: center; background: #fff; border-radius: 6px; color: var(--gris); font-size: 0.8em; text-align: center; }
+.producto .foto img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.producto .nombre { font-size: 0.92em; line-height: 1.25; }
+.producto:hover:not(:disabled) { border-color: var(--acento); }
+.producto .precio { font-weight: 700; }
+.sin-stock { color: var(--error); font-size: 0.8em; }
+.estado-catalogo { display: flex; gap: 12px; align-items: center; font-size: 0.85em; color: var(--gris); }
+.estado-catalogo button { padding: 4px 10px; }
+.estado-catalogo .error { color: var(--error); }
+.estado-catalogo a { margin-left: auto; color: var(--gris); }
+
+.ticket { background: #fff; border-left: 1px solid var(--borde); padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+.ticket h2 { margin: 0; }
+.lineas { list-style: none; margin: 0; padding: 0; }
+.lineas li { display: grid; grid-template-columns: 1fr auto 100px 28px; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--borde); }
+.linea-info { display: flex; flex-direction: column; }
+.linea-info .detalle { font-size: 0.85em; color: var(--gris); }
+.cantidad { display: flex; align-items: center; gap: 6px; }
+.cantidad button { padding: 2px 10px; }
+.importe { text-align: right; font-weight: 600; }
+.quitar { border: none; color: var(--gris); font-size: 1.2em; padding: 0; }
+.sugerencias-vendedor { background: var(--acento-suave); border-radius: 10px; padding: 10px 12px; }
+.sugerencias-vendedor h3 { margin: 0 0 6px; font-size: 0.85em; color: var(--acento); text-transform: uppercase; letter-spacing: 0.04em; }
+.sugerencia { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid rgba(255, 106, 26, 0.15); }
+.sugerencia:last-child { border-bottom: none; }
+.sugerencia .nombre { grid-column: 1 / -1; font-size: 0.92em; }
+.sugerencia .precio { font-weight: 600; font-size: 0.9em; }
+.sugerencia .ahorro-sugerencia { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; width: fit-content; color: #124d28; background: #d0f5d8; border-left: 4px solid #17a34a; border-radius: 6px; padding: 6px 10px; font-size: 1em; font-weight: 700; margin: 4px 0; }
+.sugerencia .ahorro-sugerencia strong { font-size: 1.35em; font-weight: 900; }
+.sugerencia button { padding: 4px 10px; border-color: var(--acento); color: var(--acento); }
+.totales > div { display: flex; justify-content: space-between; padding: 2px 0; }
+.totales .descuento { color: var(--ok); }
+.totales .total { font-size: 1.6em; font-weight: 700; border-top: 2px solid var(--texto); margin-top: 6px; padding-top: 8px; }
+.cobro { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--borde); padding-top: 12px; }
+.metodos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.cobro label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
+.cobro label small { color: var(--gris); font-weight: 400; }
+.cobro label input { font-size: 1.1em; }
+.datos-nuevos { display: flex; flex-direction: column; gap: 6px; background: var(--fondo); padding: 10px; border-radius: 8px; }
+.datos-nuevos p { margin: 0; font-size: 0.9em; }
+.acciones { display: flex; gap: 8px; justify-content: space-between; }
+.acciones .primario { flex: 1; padding: 14px; font-size: 1.1em; }
+.factura-ok { display: flex; flex-direction: column; gap: 8px; text-align: center; padding-top: 40px; }
+.factura-ok h2 { color: var(--ok); }
+.factura-ok p { margin: 0; }
+.factura-ok .total { font-size: 2em; font-weight: 700; margin: 12px 0; }
+.factura-ok .primario { margin-top: 24px; padding: 14px; font-size: 1.1em; }
+
+/* ---------------- Cliente ---------------- */
+.cliente { height: 100vh; overflow: hidden; background: #111214; color: #fff; display: flex; flex-direction: column; position: relative; cursor: none; user-select: none; }
+.cliente .marca { display: flex; justify-content: space-between; align-items: center; padding: min(24px, 2vh) 48px; flex-shrink: 0; }
+.cliente .logo { height: 8vh; display: block; }
+.cliente .web { color: #9ca3af; }
+.cliente s { color: #6b7280; }
+
+.reposo { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 0 64px 96px; }
+.slide { animation: aparecer 0.8s ease; display: flex; flex-direction: column; align-items: center; }
+.foto-grande { background: #fff; border-radius: 28px; padding: 2vw; margin-bottom: 28px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5); }
+.foto-grande img { display: block; height: 42vh; max-width: 60vw; object-fit: contain; }
+.slide .rubro { color: var(--acento); text-transform: uppercase; letter-spacing: 0.15em; font-weight: 600; }
+.slide h1 { font-size: 4.5vw; margin: 12px 0; line-height: 1.1; }
+.slide .precio { font-size: 3.5vw; font-weight: 800; margin: 0; }
+.slide .contado { color: #9ca3af; font-size: 1.6vw; }
+.logo-grande { width: 38vw; max-height: 50vh; object-fit: contain; animation: aparecer 0.8s ease; }
+.logo-gracias { width: 16vw; margin-bottom: 4vh; opacity: 0.9; }
+.reposo .pie { position: absolute; bottom: 32px; color: #9ca3af; font-size: 1.3vw; }
+
+.venta { flex: 1; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 32px; padding: 0 48px min(40px, 3vh); min-height: 0; }
+.venta h2 { color: #9ca3af; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; font-size: 1.1vw; }
+.items { display: flex; flex-direction: column; min-height: 0; }
+.items ul { list-style: none; margin: 0; padding: 0; flex: 1; min-height: 0; overflow: hidden; }
+.items li { display: grid; grid-template-columns: 4.5vw 3vw 1fr auto; align-items: center; gap: 16px; font-size: 1.8vw; padding: 14px 0; border-bottom: 1px solid #26282c; animation: aparecer 0.4s ease; }
+.items .cant { color: #9ca3af; }
+.miniatura { width: 4.5vw; height: 4.5vw; border-radius: 10px; background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.miniatura img { max-width: 90%; max-height: 90%; object-fit: contain; }
+.miniatura:empty { background: #26282c; }
+.items .nombre { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.items .nombre .texto { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.2; }
+.items .nombre .badge { margin-left: 0; font-size: 0.6em; }
+.items .importe { font-weight: 700; display: flex; flex-direction: column; align-items: flex-end; white-space: nowrap; }
+.items .importe s { font-size: 0.6em; margin: 0; }
+.items .badge { background: rgba(255, 106, 26, 0.15); }
+.totales-cliente { padding-top: 16px; flex-shrink: 0; }
+.totales-cliente .fila { display: flex; justify-content: space-between; font-size: 1.6vw; color: #9ca3af; }
+.totales-cliente .fila.contado { color: var(--acento); }
+.totales-cliente .total { display: flex; justify-content: space-between; font-size: 3.6vw; font-weight: 800; }
+.ahorro { display: inline-block; background: var(--ok); color: #fff; font-weight: 700; padding: 6px 16px; border-radius: 999px; font-size: 1.3vw; margin-bottom: 8px; }
+
+.recomendados { background: #1b1d21; border-radius: 24px; padding: min(16px, 2vh) min(28px, 1.5vw); display: flex; flex-direction: column; gap: min(16px, 1.5vh); min-height: 0; }
+.recomendados h2 { color: var(--acento); margin: 0 0 min(12px, 1vh); flex-shrink: 0; }
+.card { position: relative; background: #24272c; border-radius: 16px; padding: min(18px, 1.2vh) min(20px, 1vw); display: flex; gap: min(16px, 1vw); align-items: center; animation: aparecer 0.5s ease; }
+.card img { width: min(7vw, 10vh); height: min(7vw, 10vh); flex-shrink: 0; object-fit: contain; border-radius: 12px; background: #fff; padding: 0.4vw; }
+.card > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.card .motivo { color: #9ca3af; font-size: 1vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 4vw; }
+.card .nombre { font-size: min(1.5vw, 2.6vh); font-weight: 600; line-height: 1.2; }
+.card .precio { display: flex; flex-wrap: wrap; gap: 0.4vw; font-size: min(1.6vw, 2.8vh); font-weight: 800; }
+.card .ahorro-sugerencia { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5vw; align-self: flex-start; color: #113d21; background: #b8f4cb; border-left: 4px solid #17a34a; border-radius: 8px; padding: min(0.45vw, 0.6vh) 0.75vw; font-size: min(1.2vw, 2vh); font-weight: 750; margin: min(6px, 0.5vh) 0; }
+.card .ahorro-sugerencia strong { font-size: min(1.9vw, 3.2vh); font-weight: 900; line-height: 1.1; }
+.card .off { position: absolute; top: -10px; right: -10px; background: var(--acento); color: #fff; font-weight: 800; font-size: 1.3vw; padding: 8px 12px; border-radius: 12px; transform: rotate(6deg); }
+.aclaracion { color: #9ca3af; font-size: 1vw; margin: auto 0 0; flex-shrink: 0; }
+
+.overlay { position: absolute; inset: 0; background: rgba(17, 18, 20, 0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 2.2vw; }
+.spinner { width: 5vw; height: 5vw; border: 0.5vw solid #333; border-top-color: var(--acento); border-radius: 50%; animation: girar 0.9s linear infinite; }
+
+.gracias { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; animation: aparecer 0.6s ease; }
+.gracias h1 { font-size: 4vw; margin: 0 0 16px; }
+.gracias p { font-size: 1.6vw; color: #9ca3af; margin: 4px; }
+.gracias .total { font-size: 3vw; color: #fff; font-weight: 800; }
+.qr { margin-top: 32px; display: flex; flex-direction: column; align-items: center; gap: 12px; font-size: 1.3vw; color: #9ca3af; }
+.qr img { width: 14vw; border-radius: 12px; }
+
+@keyframes aparecer { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes girar { to { transform: rotate(360deg); } }
+
+/* ---------------- Admin ---------------- */
+.admin { max-width: 980px; margin: 0 auto; padding: 24px; }
+.admin header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.admin nav { display: flex; gap: 6px; }
+.ayuda { color: var(--gris); }
+.regla { background: #fff; border: 1px solid var(--borde); border-radius: 12px; padding: 14px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; }
+.regla.inactiva { opacity: 0.6; }
+.regla .fila { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.regla .titulo { font-weight: 700; flex: 1; }
+.regla .pct { width: 80px; }
+.sugeridos { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
+.chip { display: inline-flex; align-items: center; gap: 4px; background: var(--fondo); border: 1px solid var(--borde); border-radius: 999px; padding: 4px 4px 4px 12px; font-size: 0.9em; }
+.chip button { border: none; background: transparent; padding: 0 6px; color: var(--gris); }
+.selector { position: relative; min-width: 260px; }
+.selector input { width: 100%; }
+.selector ul { position: absolute; z-index: 10; left: 0; right: 0; list-style: none; margin: 4px 0 0; padding: 4px; background: #fff; border: 1px solid var(--borde); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08); }
+.selector li button { width: 100%; text-align: left; border: none; }
+.selector li button:hover { background: var(--fondo); }
+.metrica { margin: 0; color: var(--gris); font-size: 0.85em; }
+.ajustes { display: flex; flex-direction: column; gap: 12px; max-width: 520px; }
+.ajustes label { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.ajustes input { width: 100px; }
+.acciones-imagenes { display: flex; gap: 16px; align-items: center; margin-bottom: 16px; color: var(--gris); }
+.sin-foto { columns: 2; font-size: 0.9em; }
+.sin-foto code { background: var(--fondo); padding: 1px 6px; border-radius: 4px; }
+.galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.galeria figure { margin: 0; background: #fff; border: 1px solid var(--borde); border-radius: 10px; padding: 8px; }
+.galeria img { width: 100%; height: 110px; object-fit: contain; }
+.galeria figcaption { font-size: 0.78em; color: var(--gris); }
+
+/* Vidriera: foto a un lado, oferta legible a distancia al otro. */
+.reposo { min-height: 0; padding: 0 4vw 7vh; }
+.producto-slide { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4vw; text-align: left; }
+.producto-slide .foto-grande { width: 100%; height: 57vh; margin: 0; display: flex; align-items: center; justify-content: center; border-radius: 20px; }
+.producto-slide .foto-grande img { width: 100%; max-width: 100%; height: 100%; }
+.slide-info { min-width: 0; }
+.producto-slide h1 { font-size: clamp(24px, 3.1vw, 64px); line-height: 1.12; margin: 18px 0 24px; overflow-wrap: anywhere; }
+.producto-slide .precio { font-size: clamp(32px, 4vw, 80px); white-space: nowrap; }
+.producto-slide .contado { font-size: clamp(14px, 1.45vw, 30px); line-height: 1.5; margin-top: 20px; }
+.oferta-anterior { display: flex; align-items: center; gap: 12px; font-size: 2vw; margin-bottom: 8px; }
+.oferta-anterior s { color: #a1a1aa; }
+.oferta-badge { background: var(--acento); padding: 6px 12px; border-radius: 8px; color: #fff; font-size: 1.5vw; font-weight: 800; }
+.oferta-ahorro { color: #66dc8d; font-size: 1.5vw; margin: 8px 0 0; }
+.reposo-video { padding-bottom: 9vh; }
+.video-slide { position: relative; width: 100%; display: grid; grid-template-columns: 1fr; gap: 2vw; align-items: center; }
+.video-slide.con-producto { grid-template-columns: minmax(0, 2.5fr) minmax(0, 1fr); }
+.video-player { position: relative; aspect-ratio: 16/9; max-height: 65vh; width: 100%; background: #000; }
+.video-mount, .video-mount iframe { width: 100%; height: 100%; border: 0; }
+.video-cargando { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: #17191d; color: #9ca3af; }
+.video-producto { text-align: left; min-width: 0; }
+.video-producto > img { width: 100%; height: 20vh; object-fit: contain; background: #fff; border-radius: 12px; padding: 10px; margin-top: 16px; }
+.video-producto .rubro { color: var(--acento); font-size: 1vw; text-transform: uppercase; letter-spacing: 0.1em; }
+.video-producto h1 { font-size: 2vw; line-height: 1.2; }
+.video-producto .precio { font-size: 2.4vw; font-weight: 800; margin: 16px 0; }
+.video-producto .contado { font-size: 1.1vw; color: #9ca3af; }
+.video-etiqueta { position: absolute; top: calc(100% + 12px); left: 0; font-size: 1vw; color: #a1a1aa; }
+
+/* Los QR mantienen su zona blanca para escanearlos desde el mostrador. */
+.gracias { padding: 3vh 4vw; min-height: 0; }
+.gracias .logo-gracias { width: 12vw; max-height: 8vh; object-fit: contain; margin-bottom: 2vh; }
+.gracias h1 { font-size: clamp(26px, 3vw, 60px); max-width: 90vw; margin-bottom: 1vh; }
+.gracias-codigos { display: flex; align-items: stretch; justify-content: center; gap: 2vw; margin-top: 3vh; }
+.gracias-codigos .qr { margin: 0; padding: 2vh 2vw; background: #1b1d21; border: 1px solid #303239; border-radius: 20px; justify-content: center; width: 29vw; gap: 1.2vh; }
+.gracias-codigos .qr h2 { font-size: clamp(18px, 1.6vw, 34px); margin: 0; color: #fff; }
+.gracias-codigos .qr img { width: clamp(130px, 16vw, 300px); height: clamp(130px, 16vw, 300px); max-height: 29vh; max-width: 29vh; background: #fff; border-radius: 8px; image-rendering: pixelated; }
+.gracias-codigos .qr span { font-size: clamp(12px, 1.05vw, 24px); }
+.gracias-codigos .qr-opinion { border-color: #7b511b; background: #24201a; }
+.estrellas { color: #ffbd43; font-size: clamp(24px, 2.3vw, 46px); letter-spacing: 0.18em; line-height: 1; }
+
+.admin header { flex-wrap: wrap; gap: 12px; }
+.admin nav { flex-wrap: wrap; }
+.pantalla-ajustes fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.panel-reposo { background: #fff; border: 1px solid var(--borde); border-radius: 14px; padding: 22px; margin-bottom: 16px; }
+.panel-reposo h2 { margin: 0 0 12px; font-size: 1.25em; }
+.panel-reposo h3 { font-size: 1em; }
+.campos-reposo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.campos-reposo label, .enlace-opinion { display: flex; flex-direction: column; gap: 6px; font-size: 0.9em; font-weight: 600; min-width: 0; }
+.campos-reposo input, .campos-reposo select, .enlace-opinion input { width: 100%; min-width: 0; font-weight: 400; }
+.campo-ancho { grid-column: 1 / -1; }
+.video-editor { background: var(--fondo); border: 1px solid var(--borde); border-radius: 10px; padding: 16px; margin: 14px 0; }
+.video-editor.inactivo { border-style: dashed; }
+.video-editor-cabecera { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+.video-editor-cabecera strong { margin-right: auto; }
+.video-editor .check { display: flex; gap: 6px; align-items: center; }
+.guardar-pantalla { padding: 12px 24px; }
+.guardado { color: #16743b; }
+@media (max-width: 700px) {
+  .campos-reposo { grid-template-columns: 1fr; }
+  .admin { padding: 16px; }
+  .producto-slide { gap: 3vw; }
+  .producto-slide h1 { font-size: 3.8vw; margin: 12px 0; }
+  .producto-slide .precio { font-size: 4.5vw; }
+  .producto-slide .contado { font-size: 2vw; }
+  .gracias-codigos .qr { width: 40vw; }
+}

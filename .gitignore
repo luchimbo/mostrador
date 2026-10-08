@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env*
+!.env.example
+data/
+referencias/
+
+# Separate migration prototype; the root app is the maintained counter.
+/app/
+
+# Local logs and editor files.
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,28 @@
+{
+  "name": "mostrador-pcmidi",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mostrador con pantalla para el cliente, cross-selling y facturación vía Contabilium - PC MIDI Center",
+  "scripts": {
+    "dev": "concurrently -k -n server,web -c blue,green \"node --watch server/index.js\" \"vite\"",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "test": "node --test server/*.test.js",
+    "probar-contabilium": "node scripts/probar-contabilium.js",
+    "probar-borrador": "node scripts/probar-borrador.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.2",
+    "concurrently": "^10.0.5",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "socket.io-client": "^4.8.4",
+    "vite": "^8.3.3"
+  }
+}
