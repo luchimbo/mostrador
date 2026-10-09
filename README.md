@@ -6,6 +6,56 @@ Sistema de mostrador con **pantalla para el cliente** (estilo Clover), **recomen
 - **Pantalla del cliente** (`/cliente`, segundo monitor): ve en vivo lo que se le cobra, las sugerencias con descuento y, al final, un QR para dejar una opinión en Google. Sin venta en curso, pasa ofertas, productos destacados y videos.
 - **Ajustes** (`/admin`): reglas de recomendación, productos destacados, descuentos, topes y métricas (cuántas veces se mostró y aceptó cada sugerencia).
 
+## Instalar en otra computadora
+
+Requisitos (Windows):
+
+- **Node.js 22 LTS** o superior: descargalo de [nodejs.org](https://nodejs.org) e instalalo con las opciones por defecto.
+- **Git**: [git-scm.com](https://git-scm.com/download/win).
+- **Google Chrome** instalado en la ruta normal (`C:\Program Files\Google\Chrome\Application\chrome.exe`). Solo lo usa `iniciar-mostrador.bat` para abrir las pantallas.
+
+Pasos:
+
+1. Abrí una terminal (PowerShell o Git Bash) en la carpeta donde lo quieras guardar y descargá el proyecto:
+
+   ```bash
+   git clone https://github.com/luchimbo/mostrador.git
+   cd mostrador
+   ```
+
+2. Instalá las dependencias:
+
+   ```bash
+   npm install
+   ```
+
+3. Creá el archivo de configuración copiando el ejemplo:
+
+   ```bash
+   copy .env.example .env
+   ```
+
+   (En Git Bash: `cp .env.example .env`). Así como viene arranca en **modo prueba** (`CONTABILIUM_MODE=mock`): catálogo de ejemplo y facturas falsas, sin tocar Contabilium. Para usar el catálogo y la facturación reales, completá las credenciales y los IDs como se explica en [Puesta en marcha con Contabilium](#puesta-en-marcha-con-contabilium). El `.env` **no se sube a GitHub**: hay que crearlo (o copiarlo a mano, por un medio seguro) en cada computadora.
+
+4. Iniciá el mostrador:
+   - **Uso en el local:** doble clic en `iniciar-mostrador.bat`. La primera vez arma la versión de producción y después abre la pantalla del vendedor y la del cliente (ver [Uso diario](#uso-diario)).
+   - **Solo probar en el navegador:** `npm run build` y luego `npm start`, y abrí <http://localhost:3000/vendedor>, <http://localhost:3000/cliente> y <http://localhost:3000/admin>.
+   - **Para programar:** `npm run dev` y abrí <http://localhost:5173/vendedor> (se recarga solo al editar).
+
+5. Opcional: `npm test` corre los tests para confirmar que todo quedó bien instalado.
+
+**Datos que no viajan con GitHub.** La carpeta `data/` (reglas de recomendación, ajustes, destinos de cobranza, facturas emitidas y registro de ventas) queda solo en cada computadora. En una instalación nueva se arranca con las reglas de ejemplo. Para llevarte la configuración de la compu actual, copiá la carpeta `data/real/` (o `data/mock/`) a la misma ubicación en la nueva, con el servidor cerrado.
+
+**Actualizar a la última versión** en una computadora ya instalada:
+
+```bash
+git pull
+npm install
+npm run build
+```
+
+El `npm run build` es necesario porque `iniciar-mostrador.bat` solo arma la versión de producción si no existe la carpeta `dist`.
+
 ## Uso diario
 
 ### Pantalla en reposo y opiniones
