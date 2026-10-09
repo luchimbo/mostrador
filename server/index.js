@@ -13,7 +13,7 @@ import { appendLog, getSettings, readJson, readLog, saveSettings, writeJson } fr
 import { combinarConTienda, estadoTienda, sincronizarTienda, tiendaSinContabilium } from "./tiendanube.js";
 import { productosEnReposo } from "../shared/display.js";
 import { incluirProductosPrueba } from "./catalog.js";
-import { registrarCobranza } from "./cobranza.js";
+import { comprobanteEmitido, registrarCobranza } from "./cobranza.js";
 
 const backend = config.mode === "real" ? contabilium : mock;
 const facturador = config.facturacionSimulada ? mock : contabilium;
@@ -75,7 +75,7 @@ let destacados = readJson("destacados.json", config.mode === "mock" ? ["102", "2
 // ---------- Venta en curso ----------
 const sale = new Sale();
 const recuperada = readJson("factura-en-cobranza.json", null);
-if (recuperada?.cae && recuperada.cobranza?.modalidad === "manual") {
+if (comprobanteEmitido(recuperada) && recuperada.cobranza?.modalidad === "manual") {
   sale.factura = recuperada;
   sale.cliente = recuperada.cliente;
   sale.fase = "cobranza";
@@ -159,7 +159,7 @@ function producto(id) {
 
 async function accionFacturar(datosCliente) {
   if (sale.fase === "facturando") throw new Error("Ya se está emitiendo una factura.");
-  if (sale.factura?.cae) throw new Error("Esta venta ya tiene una factura emitida. Iniciá una nueva venta.");
+  if (comprobanteEmitido(sale.factura)) throw new Error("Esta venta ya tiene un comprobante emitido. Iniciá una nueva venta.");
   if (sale.comprobantePendiente) throw new Error(`Revisá el comprobante ${sale.comprobantePendiente} en Contabilium antes de iniciar otra emisión.`);
   const settings = getSettings();
   const snapshot = sale.snapshot(productsById, reglas, settings);
@@ -186,6 +186,7 @@ async function accionFacturar(datosCliente) {
       cobranza: res.cobranza,
       total: res.total,
       metodoPago: snapshot.metodoPago,
+      tipo: res.tipo,
       condicionVenta: res.condicionVenta,
       prueba: res.prueba,
       factura: res,
@@ -197,7 +198,7 @@ async function accionFacturar(datosCliente) {
     else finalizarVenta();
     return { ok: true, factura: res };
   } catch (err) {
-    sale.fase = sale.factura?.cae ? "cobranza" : "venta";
+    sale.fase = comprobanteEmitido(sale.factura) ? "cobranza" : "venta";
     sale.error = err.message;
     if (err.idComprobante) {
       sale.comprobantePendiente = err.idComprobante;
@@ -244,6 +245,7 @@ const ACCIONES = {
   cantidad: ({ lineId, cantidad }) => sale.cambiarCantidad(lineId, Number(cantidad)),
   quitar: ({ lineId }) => sale.quitar(lineId),
   metodoPago: ({ metodo }) => sale.setMetodoPago(metodo),
+  sinFactura: ({ valor }) => sale.setSinFactura(valor),
   cancelar: () => {
     if (["facturando", "cobrando"].includes(sale.fase)) throw new Error("Esperá a que termine la operación en curso.");
     writeJson("factura-en-cobranza.json", null);
@@ -259,7 +261,7 @@ io.on("connection", (socket) => {
     const fn = ACCIONES[msg?.tipo];
     try {
       if (!fn) throw new Error(`Acción desconocida: ${msg?.tipo}`);
-      if (["cantidad", "quitar", "metodoPago"].includes(msg.tipo) && ["facturando", "cobranza", "cobrando"].includes(sale.fase)) throw new Error("Terminá la factura y cobranza antes de modificar la venta.");
+      if (["cantidad", "quitar", "metodoPago", "sinFactura"].includes(msg.tipo) && ["facturando", "cobranza", "cobrando"].includes(sale.fase)) throw new Error("Terminá la factura y cobranza antes de modificar la venta.");
       const res = await fn(msg);
       ack({ ok: true, ...(res || {}) });
     } catch (err) {
@@ -347,7 +349,7 @@ app.get("/api/metricas", (_req, res) => {
 app.get("/api/facturas", (_req, res) => {
   const cobranzas = new Map(readLog("cobranzas.jsonl").map(c => [String(c.idComprobante), c]));
   res.json(readLog("ventas.jsonl").filter((v) => !v.prueba || config.facturacionSimulada).slice(-500).reverse().map((v) => ({
-    fecha: v.fecha, numero: v.numero, idComprobante: v.idComprobante,
+    fecha: v.fecha, numero: v.numero, idComprobante: v.idComprobante, tipo: v.tipo || v.factura?.tipo,
     cliente: v.cliente, total: v.total, metodoPago: v.metodoPago,
     url: v.url, cobranza: cobranzas.get(String(v.idComprobante)) || v.cobranza, prueba: v.prueba,
     condicionVenta: v.condicionVenta,
@@ -356,7 +358,7 @@ app.get("/api/facturas", (_req, res) => {
 
 app.post("/api/facturas/:id/retomar", (req, res) => {
   if (sale.fase !== "idle") return res.status(409).json({ error: "Terminá la venta actual antes de retomar una cobranza." });
-  const v = readLog("ventas.jsonl").find(v => String(v.idComprobante) === req.params.id && v.factura?.cae && (!v.prueba || config.facturacionSimulada));
+  const v = readLog("ventas.jsonl").find(v => String(v.idComprobante) === req.params.id && comprobanteEmitido(v.factura) && (!v.prueba || config.facturacionSimulada));
   const registro = readLog("cobranzas.jsonl").filter(c => String(c.idComprobante) === req.params.id).at(-1);
   const cobranza = registro || v?.cobranza;
   if (!v || cobranza?.modalidad !== "manual" || cobranza.estado !== "pendiente") return res.status(409).json({ error: "La factura no tiene una cobranza manual pendiente disponible." });

@@ -21,7 +21,7 @@ export default function Cliente() {
       {estado.fase === "facturando" && (
         <div className="overlay">
           <div className="spinner" />
-          <p>Emitiendo tu factura…</p>
+          <p>{estado.sinFactura ? "Registrando tu compra…" : "Emitiendo tu factura…"}</p>
         </div>
       )}
     </div>
@@ -95,7 +95,7 @@ function Venta({ estado }) {
     if (lista.current) lista.current.scrollTop = lista.current.scrollHeight;
   }, [estado.lines.length]);
   return (
-    <div className="venta">
+    <div className={`venta ${estado.lines.length >= 3 ? "compacta" : ""} ${estado.lines.length >= 5 ? "larga" : ""}`}>
       <section className="items">
         <h2>Tu compra</h2>
         <ul ref={lista}>
@@ -178,10 +178,6 @@ function Gracias({ factura, opinionUrl }) {
     <div className="gracias">
       <img className="logo-gracias" src="/logo.png" alt="PC MIDI Center" />
       <h1>¡Gracias por tu compra{factura.cliente.nombre && factura.cliente.nombre !== "Consumidor Final" ? `, ${factura.cliente.nombre}` : ""}!</h1>
-      <p>
-        {factura.tipo} N° {factura.numero}
-      </p>
-      <p className="total">{pesos(factura.total)}</p>
       <div className="gracias-codigos">
       {opinionUrl && <div className="qr qr-opinion">
         <div className="estrellas" aria-label="Cinco estrellas decorativas">★★★★★</div>

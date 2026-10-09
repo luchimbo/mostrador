@@ -2,6 +2,7 @@
 // la pantalla del vendedor manda acciones y ambas pantallas reciben el mismo estado.
 import { calcularLinea, calcularTotales, descuentoSeguro, METODOS_PAGO } from "./pricing.js";
 import { obtenerSugerencias, reglaSeDispara } from "./recommendations.js";
+import { comprobanteEmitido } from "./cobranza.js";
 
 let nextLineId = 1;
 
@@ -13,6 +14,7 @@ export class Sale {
   reset() {
     this.lines = [];
     this.metodoPago = null;
+    this.sinFactura = false; // efectivo sin factura: se registra como cotización
     this.fase = "idle"; // idle | venta | facturando | gracias
     this.cliente = null; // { nombre, documento } a mostrar
     this.factura = null;
@@ -63,6 +65,12 @@ export class Sale {
   setMetodoPago(metodo) {
     metodo = { debito: "mercadopago", credito: "mercadopago", transferencia: "efectivo" }[metodo] || metodo;
     this.metodoPago = METODOS_PAGO[metodo] ? metodo : null;
+    if (this.metodoPago !== "efectivo") this.sinFactura = false;
+  }
+
+  setSinFactura(valor) {
+    if (valor && this.metodoPago !== "efectivo") throw new Error("La venta sin factura es solo para Efectivo.");
+    this.sinFactura = Boolean(valor);
   }
 
   // Recalcula descuentos de los productos que entraron por recomendación:
@@ -86,8 +94,9 @@ export class Sale {
     return {
       fase: this.fase,
       lines: this.lines.map((l) => ({ ...l, ...calcularLinea(l), recomendado: Boolean(l.reglaId) })),
-      totales: { ...calcularTotales(this.lines, this.metodoPago, settings), ...(this.factura?.cae ? { totalAPagar: this.factura.total } : {}) },
+      totales: { ...calcularTotales(this.lines, this.metodoPago, settings), ...(comprobanteEmitido(this.factura) ? { totalAPagar: this.factura.total } : {}) },
       metodoPago: this.metodoPago,
+      sinFactura: this.sinFactura,
       sugerencias,
       cliente: this.cliente,
       factura: this.factura,

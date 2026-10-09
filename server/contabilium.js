@@ -7,6 +7,7 @@
 //   GET  /api/clientes/search       buscar cliente por documento
 //   POST /api/clientes              alta de cliente  (*a verificar*)
 //   POST /api/comprobantes/crear + GET /api/comprobantes/emitirFE   factura sin cobranza
+//   POST /api/comprobantes/crear (TipoFc COT)   cotización: venta en efectivo sin factura
 //   GET  /api/usuarios/obtenerinfo, /api/puntosdeventa/search   diagnóstico
 import { config } from "./config.js";
 import { clasificarDocumento, validarCuit } from "./documento.js";
@@ -199,14 +200,21 @@ export function configurarCondicionVenta(metodo, condiciones, ajustes = {}) {
   return { condicionVenta: condicion.Nombre, automatico };
 }
 
+// Sin IDMoneda, /comprobantes/crear falla (HTTP 500) con productos cargados en dólares.
+export function monedaPesos(monedas) {
+  const pesos = monedas.filter((m) => activo(m.Activa) && (m.CodigoMoneda === "$" || /^pesos?\b/i.test(m.DescripcionMoneda || "")));
+  if (pesos.length !== 1) throw new Error("No se encontró la moneda Pesos en Contabilium. No se creó ningún comprobante.");
+  return Number(pesos[0].IDMoneda);
+}
+
 export async function obtenerConfiguracionFacturacion(metodo) {
-  const [condiciones, depositos] = await Promise.all([get("/usuarios/condicionesVenta"), get("/inventarios/getDepositos")]);
+  const [condiciones, depositos, monedas] = await Promise.all([get("/usuarios/condicionesVenta"), get("/inventarios/getDepositos"), get("/monedas/search")]);
   const factura = configurarCondicionVenta(metodo, itemsDe(condiciones), { condicionVenta: config.contabilium.condicionesVenta[metodo] });
   const inventario = config.contabilium.inventario;
   if (!itemsDe(depositos).some((d) => Number(d.Id) === inventario && activo(d.Activo))) {
     throw new Error("Falta configurar un depósito activo (CONTABILIUM_INVENTARIO). No se creó ningún comprobante.");
   }
-  return { ...factura, inventario };
+  return { ...factura, inventario, idMoneda: monedaPesos(itemsDe(monedas)) };
 }
 
 // El destino y la forma de cobro se toman de la condición MercadoPago de la cuenta.
@@ -252,5 +260,25 @@ export async function emitirFactura(payload, api = {
     observaciones: res?.ObservacionesAFIP || "",
     total: res?.Total ?? res?.total,
     cobranza: { estado: "pendiente", modalidad: "manual" },
+  };
+}
+
+// Venta sin factura: la cotización solo se crea, no se emite ante ARCA. Igual que la
+// factura, el POST nunca se reintenta. El número se lee después (solo lectura).
+export async function emitirCotizacion(payload, api = {
+  crear: (p) => post("/comprobantes/crear", p),
+  consultar: consultarComprobante,
+}) {
+  const creado = await api.crear({ ...payload, Pagos: null });
+  const idComprobante = Number(typeof creado === "object" ? creado?.Id ?? creado?.id ?? creado?.idComprobante ?? creado?.IdComprobante : creado);
+  if (!Number.isSafeInteger(idComprobante) || idComprobante <= 0) {
+    throw new Error("Contabilium no devolvió el ID de la cotización. Revisá los comprobantes antes de volver a intentar.");
+  }
+  const datos = await api.consultar(idComprobante).catch(() => null);
+  return {
+    idComprobante,
+    numero: datos?.Numero ?? datos?.numero ?? "",
+    url: datos?.LinkPublico ?? datos?.Url ?? "",
+    total: datos?.ImporteTotalNeto ?? datos?.Total,
   };
 }

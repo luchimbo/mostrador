@@ -40,3 +40,22 @@ test("Condiciones: convierte las selecciones anteriores a las tres opciones actu
     sale.setMetodoPago(anterior); assert.equal(sale.metodoPago, actual);
   }
 });
+
+test("Comprobante en pesos aunque el producto esté cargado en dólares", async () => {
+  const { monedaPesos } = await import("./contabilium.js");
+  const monedas = [
+    { IDMoneda: 1659, DescripcionMoneda: "Pesos Argentinos", CodigoMoneda: "$", EsMonedaPorDefecto: true, Activa: true },
+    { IDMoneda: 7732, DescripcionMoneda: "Dolar Estadounidense", CodigoMoneda: "U$S", EsMonedaPorDefecto: false, Activa: true },
+  ];
+  assert.equal(monedaPesos(monedas), 1659);
+  assert.throws(() => monedaPesos(monedas.slice(1)), /moneda Pesos/);
+
+  const lines = [{ productId: "26604", nombre: "PRODUCTO DEMO", precioFinal: 3946.8, iva: 21, cantidad: 1, descuentoPct: 0 }];
+  let enviado;
+  await facturar({ backend: {
+    obtenerConfiguracionFacturacion: async () => ({ condicionVenta: "Efectivo", automatico: false, inventario: 1662, idMoneda: 1659 }),
+    buscarClientePorDocumento: async () => ({ Id: 4, CondicionIva: "CF" }),
+    emitirFactura: async (p) => { enviado = p; return { idComprobante: 123, cae: "PRUEBA", errores: "" }; },
+  }, snapshot: { lines, metodoPago: "efectivo", totales: calcularTotales(lines, "efectivo", DEFAULT_SETTINGS) }, settings: DEFAULT_SETTINGS, datosCliente: { documento: "30123456", condicionIva: "CF" } });
+  assert.equal(enviado.IDMoneda, 1659);
+});

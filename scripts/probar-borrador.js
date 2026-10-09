@@ -5,6 +5,7 @@
 //   npm run probar-borrador                 -> solo muestra lo que se enviaría (no toca nada)
 //   npm run probar-borrador -- --confirmar  -> crea el borrador en Contabilium
 //   npm run probar-borrador -- AIS022       -> elegir otro producto por SKU
+//   npm run probar-borrador -- --cotizacion -> venta sin factura (tipo Cotización)
 //
 // Después de crearlo: revisalo en Contabilium (Ventas -> Comprobantes) y eliminalo.
 
@@ -13,12 +14,13 @@ process.env.CONTABILIUM_MODE = "real";
 
 const args = process.argv.slice(2);
 const confirmar = args.includes("--confirmar");
+const cotizacion = args.includes("--cotizacion");
 const sku = (args.find((a) => !a.startsWith("--")) || "AIS022").toUpperCase();
 
 const { config } = await import("../server/config.js");
-const { descargarCatalogo, post } = await import("../server/contabilium.js");
+const { descargarCatalogo, get, post, monedaPesos } = await import("../server/contabilium.js");
 const { combinarConTienda } = await import("../server/tiendanube.js");
-const { armarComprobante } = await import("../server/invoice.js");
+const { armarComprobante, TIPO_COTIZACION } = await import("../server/invoice.js");
 const { Sale } = await import("../server/sale.js");
 const { getSettings } = await import("../server/store.js");
 
@@ -48,8 +50,9 @@ const { Pagos, ...comprobante } = armarComprobante({
   metodoPago: snapshot.metodoPago,
   totales: snapshot.totales,
   idCliente: config.contabilium.idClienteConsumidorFinal,
-  tipoFc: "FCB",
+  tipoFc: cotizacion ? TIPO_COTIZACION : "FCB",
   settings,
+  cobro: { inventario: config.contabilium.inventario, idMoneda: monedaPesos(await get("/monedas/search")) },
 });
 // El borrador no lleva cobranza; la fecha de vencimiento la pide /comprobantes/crear.
 comprobante.FechaVencimiento = comprobante.FechaEmision;

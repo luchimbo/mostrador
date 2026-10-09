@@ -75,6 +75,10 @@ Tras recibir CAE, MercadoPago muestra la cobranza automática. Efectivo y Otros 
 
 La cobranza manual consulta primero la factura por ID y verifica CAE, total y saldo completo pendiente. Si existe un cobro previo, incluso parcial, se requiere revisar en Contabilium para evitar que /comprobantes/cobrar reemplace el recibo. No se reintenta un POST ni se repite una factura para corregir el cobro. Si no se puede confirmar la respuesta del cobro, el estado queda para revisión. Este flujo cubre una factura en pesos, con cobro completo repartido entre medios; cobranzas parciales, retenciones y otras monedas se gestionan en Contabilium.
 
+### Efectivo sin factura (cotización)
+
+Con condición **Efectivo**, el vendedor puede elegir **Sin factura (cotización)**. Se crea el comprobante como en *Ventas → Facturación* con tipo de comprobante **Cotización** (`TipoFc: "COT"`, solo `/comprobantes/crear`, no va a ARCA ni tiene CAE). El resto es igual a Efectivo: condición de venta Efectivo, descuento de contado y cobranza manual con los mismos medios y destinos. El DNI/CUIT es opcional; sin documento se usa el cliente `CONTABILIUM_ID_CLIENTE_CF`. Antes de cobrar se verifica que el comprobante siga siendo una cotización sin CAE, con el total y el saldo completos. Para ver el formato: `npm run probar-borrador -- --cotizacion` (con `--confirmar` la crea en Contabilium; revisala y eliminala).
+
 La factura y su estado de cobranza sobreviven a un reinicio en factura-en-cobranza.json. La condición y modalidad quedan en ventas.jsonl, y la cobranza registrada o incierta en cobranzas.jsonl. El agradecimiento y QR de opiniones aparecen después de guardar la cobranza manual. También se puede dejar pendiente y retomarla desde Ajustes → Facturas emitidas. Las cobranzas automáticas con CAE y error conservan la factura y requieren revisar el cobro.
 
 Las facturas quedan disponibles en Ajustes → Facturas emitidas, incluso después de iniciar otra venta. Ese historial se actualiza con cobranzas hechas desde la app; no comprueba cobros cargados posteriormente en Contabilium hasta que se intenta retomar la cobranza.

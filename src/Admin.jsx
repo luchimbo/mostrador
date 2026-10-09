@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, buscar, pesos } from "./lib.js";
 import PantallaReposo from "./PantallaReposo.jsx";
+import { coincideNombre } from "../shared/reglas.js";
+
+const coincideDisparador = (regla, p) => !regla.sugeridos.map(String).includes(String(p.id)) && coincideNombre(regla.disparador, p);
 
 export default function Admin() {
   const [tab, setTab] = useState("reglas");
@@ -57,7 +60,7 @@ function FacturasEmitidas() {
         <thead><tr><th>Fecha</th><th>Factura</th><th>Cliente</th><th>Total</th><th>Condición de venta</th><th>Cobranza al emitir</th></tr></thead>
         <tbody>{facturas.map((f, i) => <tr key={f.idComprobante || `${f.fecha}:${i}`}>
           <td>{new Date(f.fecha).toLocaleString("es-AR")}</td>
-          <td>{f.url ? <a href={f.url} target="_blank" rel="noreferrer">{f.numero}</a> : f.numero}{f.prueba && " (PRUEBA)"}<br /><small>{f.idComprobante ? `ID ${f.idComprobante}` : ""}</small></td>
+          <td>{f.url ? <a href={f.url} target="_blank" rel="noreferrer">{f.numero}</a> : f.numero}{f.tipo === "Cotización" && " · Sin factura"}{f.prueba && " (PRUEBA)"}<br /><small>{f.idComprobante ? `ID ${f.idComprobante}` : ""}</small></td>
           <td>{f.cliente?.nombre}<br /><small>{f.cliente?.documento}</small></td>
           <td>{pesos(f.total)}</td><td>{medios[f.metodoPago] || f.metodoPago}</td>
           <td>{f.cobranza?.estado === "revisar" ? "Revisar en Contabilium" : f.cobranza?.estado === "registrada" ? "Cobranza registrada" : f.cobranza?.modalidad === "manual" ? "Cobranza pendiente" : "Registro anterior"}
@@ -178,8 +181,27 @@ function Reglas({ productos, porId }) {
                 <option value="rubro">cualquier producto de la categoría</option>
                 <option value="subrubro">cualquier producto de la subcategoría</option>
                 <option value="producto">el producto</option>
+                <option value="nombre">un producto cuyo nombre contenga</option>
               </select>
-              {r.disparador.tipo === "rubro" || r.disparador.tipo === "subrubro" ? (
+              {r.disparador.tipo === "nombre" ? (
+                <>
+                  <input
+                    placeholder="minifuse, studio m"
+                    title="Separá con comas. Si ponés varias palabras juntas, el nombre tiene que tener todas."
+                    value={r.disparador.valor}
+                    onChange={(e) => cambiar(r.id, { disparador: { ...r.disparador, valor: e.target.value } })}
+                  />
+                  <span>salvo que contenga</span>
+                  <input
+                    placeholder="funda, soporte"
+                    value={r.disparador.excluir || ""}
+                    onChange={(e) => cambiar(r.id, { disparador: { ...r.disparador, excluir: e.target.value } })}
+                  />
+                  <span className="metrica">
+                    {productos.filter((p) => coincideDisparador(r, p)).length} productos coinciden
+                  </span>
+                </>
+              ) : r.disparador.tipo === "rubro" || r.disparador.tipo === "subrubro" ? (
                 <select
                   value={r.disparador.valor}
                   onChange={(e) => cambiar(r.id, { disparador: { tipo: r.disparador.tipo, valor: e.target.value } })}
@@ -229,6 +251,15 @@ function Reglas({ productos, porId }) {
                 onElegir={(p) => cambiar(r.id, { sugeridos: [...r.sugeridos, String(p.id)] })}
               />
             </div>
+            <label className="mensaje-regla">
+              Frase para el vendedor
+              <textarea
+                rows="2"
+                placeholder="¿Tenés la funda para protegerlo y transportarlo?"
+                value={r.mensaje || ""}
+                onChange={(e) => cambiar(r.id, { mensaje: e.target.value })}
+              />
+            </label>
             {m && (
               <p className="metrica">
                 Mostrada {m.mostradas} veces · aceptada {m.aceptadas}

@@ -4,6 +4,9 @@ import { clasificarDocumento, formatearDocumento, tipoFactura } from "./document
 import { combinarDescuentos, esContado, round2 } from "./pricing.js";
 import { importeContabilium } from "./cobranza.js";
 
+// Venta en efectivo sin factura: Ventas → Facturación con tipo de comprobante Cotización.
+export const TIPO_COTIZACION = "COT";
+
 // Valores de prueba. El backend real resuelve la condición y destino en la cuenta.
 const CONDICION_VENTA = {
   mercadopago: "MercadoPago",
@@ -22,7 +25,13 @@ export function normalizarCondicionIva(valor) {
   return "CF";
 }
 
-async function resolverCliente(backend, datos) {
+async function resolverCliente(backend, datos, { sinFactura = false } = {}) {
+  // Sin factura el documento es opcional: se usa el cliente "Consumidor Final" genérico.
+  if (sinFactura && !String(datos.documento || "").replace(/\D/g, "")) {
+    const id = config.contabilium.idClienteConsumidorFinal;
+    if (!id && !config.facturacionSimulada) throw new Error("Falta configurar CONTABILIUM_ID_CLIENTE_CF en el archivo .env para ventas sin documento.");
+    return { id, nombre: "Consumidor Final", condicionIva: "CF", documentoTexto: "" };
+  }
   const doc = clasificarDocumento(datos.documento);
 
   if (!["CF", "RI", "MO", "EX"].includes(datos.condicionIva)) throw new Error("Elegí la condición frente al IVA del cliente.");
@@ -60,7 +69,7 @@ async function resolverCliente(backend, datos) {
 }
 
 export function armarComprobante({ lines, metodoPago, totales, idCliente, tipoFc, settings, cobro }) {
-  if (!["FCA", "FCB"].includes(tipoFc)) throw new Error("Tipo de factura inválido para Contabilium.");
+  if (!["FCA", "FCB", TIPO_COTIZACION].includes(tipoFc)) throw new Error("Tipo de comprobante inválido para Contabilium.");
   const pctContado = esContado(metodoPago) ? settings.descuentoContadoPct : 0;
   const hoy = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" });
   return {
@@ -68,12 +77,13 @@ export function armarComprobante({ lines, metodoPago, totales, idCliente, tipoFc
     TipoFc: tipoFc,
     PuntoVenta: config.contabilium.puntoVenta,
     Inventario: cobro?.inventario ?? config.contabilium.inventario,
+    IDMoneda: cobro?.idMoneda ?? null,
     Modo: "E",
     CondicionVenta: cobro?.condicionVenta ?? CONDICION_VENTA[metodoPago],
     TipoConcepto: 1, // productos
     FechaEmision: `${hoy}T00:00:00`,
     FechaVencimiento: `${hoy}T00:00:00`,
-    Observaciones: "Venta en mostrador",
+    Observaciones: tipoFc === TIPO_COTIZACION ? "Venta en mostrador sin factura" : "Venta en mostrador",
     Items: lines.map((l) => ({
       IdConcepto: Number(l.productId) || null,
       Codigo: l.codigo || "",
@@ -91,6 +101,8 @@ export function armarComprobante({ lines, metodoPago, totales, idCliente, tipoFc
 export async function facturar({ backend, snapshot, datosCliente, settings }) {
   if (!snapshot.lines.length) throw new Error("No hay productos en la venta.");
   if (!snapshot.metodoPago) throw new Error("Elegí el medio de pago.");
+  const sinFactura = Boolean(snapshot.sinFactura);
+  if (sinFactura && snapshot.metodoPago !== "efectivo") throw new Error("La venta sin factura es solo para Efectivo.");
   if (!config.facturacionSimulada && !config.contabilium.puntoVenta) {
     throw new Error("Falta configurar CONTABILIUM_PUNTO_VENTA en el archivo .env");
   }
@@ -99,10 +111,10 @@ export async function facturar({ backend, snapshot, datosCliente, settings }) {
   const cobro = backend.obtenerConfiguracionFacturacion
     ? await backend.obtenerConfiguracionFacturacion(snapshot.metodoPago)
     : undefined;
-  const cliente = await resolverCliente(backend, datosCliente);
+  const cliente = await resolverCliente(backend, datosCliente, { sinFactura });
   if (cliente.necesitaDatos) return cliente;
 
-  const tipoFc = tipoFactura(cliente.condicionIva);
+  const tipoFc = sinFactura ? TIPO_COTIZACION : tipoFactura(cliente.condicionIva);
   const payload = armarComprobante({
     lines: snapshot.lines,
     metodoPago: snapshot.metodoPago,
@@ -112,6 +124,8 @@ export async function facturar({ backend, snapshot, datosCliente, settings }) {
     settings,
     cobro,
   });
+
+  if (sinFactura) return registrarCotizacion({ backend, snapshot, payload, cliente });
 
   const res = cobro?.automatico
     ? await backend.emitirFacturaCobrada(payload)
@@ -141,6 +155,31 @@ export async function facturar({ backend, snapshot, datosCliente, settings }) {
     cobranza: cobro?.automatico
       ? { estado: res.errores ? "revisar" : "registrada", modalidad: "automatica" }
       : { estado: "pendiente", modalidad: "manual" },
+    condicionVenta: payload.CondicionVenta,
+    metodoPago: snapshot.metodoPago,
+    prueba: config.facturacionSimulada,
+  };
+}
+
+// La cotización no va a ARCA: se crea el comprobante y queda con cobranza manual, igual que Efectivo.
+async function registrarCotizacion({ backend, snapshot, payload, cliente }) {
+  const res = await backend.emitirCotizacion(payload);
+  let total = snapshot.totales.totalAPagar;
+  if (res.total !== undefined && res.total !== null) {
+    try { const confirmado = importeContabilium(res.total); if (Number.isFinite(confirmado) && confirmado > 0) total = round2(confirmado); } catch { /* El saldo se verifica antes de cobrar. */ }
+  }
+  return {
+    tipo: "Cotización",
+    tipoFc: TIPO_COTIZACION,
+    cotizacion: true,
+    numero: res.numero || `ID ${res.idComprobante}`,
+    cae: null,
+    url: res.url || "",
+    idComprobante: res.idComprobante,
+    total,
+    cliente: { nombre: cliente.nombre, documento: cliente.documentoTexto },
+    advertencia: null,
+    cobranza: { estado: "pendiente", modalidad: "manual" },
     condicionVenta: payload.CondicionVenta,
     metodoPago: snapshot.metodoPago,
     prueba: config.facturacionSimulada,

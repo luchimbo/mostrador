@@ -163,6 +163,9 @@ function Sugerencias({ sugerencias, bloqueado, onAgregar }) {
   return (
     <div className="sugerencias-vendedor">
       <h3>El cliente está viendo estas sugerencias</h3>
+      {[...new Set(sugerencias.map((s) => s.mensaje).filter(Boolean))].map((m) => (
+        <p key={m} className="guion">{m}</p>
+      ))}
       {sugerencias.map((s) => (
         <div key={s.productId} className="sugerencia">
           <span className="nombre">{s.nombre}</span>
@@ -224,8 +227,11 @@ function Cobro({ estado, bloqueado, ejecutar }) {
     if (res.ok && res.necesitaDatos) setPideDatos(true);
   }
 
+  const sinFactura = estado.sinFactura;
   const soloDigitos = documento.replace(/\D/g, "");
   const documentoCompleto = [7, 8, 11].includes(soloDigitos.length);
+  // Sin factura el documento es opcional (Consumidor Final); si se ingresa, se valida igual.
+  const documentoListo = documentoCompleto || (sinFactura && !soloDigitos);
   const tipo = soloDigitos.length === 11 ? "CUIT" : "DNI";
 
   return (
@@ -244,12 +250,25 @@ function Cobro({ estado, bloqueado, ejecutar }) {
           </button>
         ))}
       </div>
+      {estado.metodoPago === "efectivo" && (
+        <>
+          <label>Comprobante</label>
+          <div className="metodos">
+            <button type="button" disabled={bloqueado} className={!sinFactura ? "activo" : ""} onClick={() => ejecutar("sinFactura", { valor: false })}>
+              Con factura
+            </button>
+            <button type="button" disabled={bloqueado} className={sinFactura ? "activo" : ""} onClick={() => ejecutar("sinFactura", { valor: true })}>
+              Sin factura (cotización)
+            </button>
+          </div>
+        </>
+      )}
       <label>
         DNI o CUIT{" "}
-        <small>{documentoCompleto ? `(${tipo})` : "Obligatorio para facturar"}</small>
+        <small>{documentoCompleto ? `(${tipo})` : sinFactura ? "Opcional sin factura" : "Obligatorio para facturar"}</small>
         <input
           inputMode="numeric"
-          required
+          required={!sinFactura}
           value={documento}
           disabled={bloqueado}
           onChange={(e) => {
@@ -266,10 +285,10 @@ function Cobro({ estado, bloqueado, ejecutar }) {
         <label>Condición frente al IVA
           <select value={condicionIva} disabled={bloqueado} onChange={(e) => setCondicionIva(e.target.value)} required>
             <option value="">Elegí la condición del cliente…</option>
-            <option value="CF">Consumidor Final (Factura B)</option>
-            <option value="RI" disabled={soloDigitos.length !== 11}>Responsable Inscripto (Factura A)</option>
-            <option value="MO" disabled={soloDigitos.length !== 11}>Monotributista (Factura A)</option>
-            <option value="EX">Exento (Factura B)</option>
+            <option value="CF">{`Consumidor Final${sinFactura ? "" : " (Factura B)"}`}</option>
+            <option value="RI" disabled={soloDigitos.length !== 11}>{`Responsable Inscripto${sinFactura ? "" : " (Factura A)"}`}</option>
+            <option value="MO" disabled={soloDigitos.length !== 11}>{`Monotributista${sinFactura ? "" : " (Factura A)"}`}</option>
+            <option value="EX">{`Exento${sinFactura ? "" : " (Factura B)"}`}</option>
           </select>
         </label>
       )}
@@ -284,20 +303,24 @@ function Cobro({ estado, bloqueado, ejecutar }) {
         <button type="button" className="secundario" disabled={bloqueado} onClick={() => ejecutar("cancelar")}>
           Cancelar venta
         </button>
-        <button type="submit" className="primario" disabled={bloqueado || !estado.metodoPago || !documentoCompleto || !condicionIva}>
+        <button type="submit" className="primario" disabled={bloqueado || !estado.metodoPago || !documentoListo || (documentoCompleto && !condicionIva)}>
           {bloqueado
-            ? "Emitiendo factura…"
+            ? sinFactura ? "Registrando cotización…" : "Emitiendo factura…"
             : !estado.metodoPago
               ? "Elegí condición de venta"
-              : !documentoCompleto
+              : !documentoListo
                 ? "Ingresá DNI o CUIT"
-                : !condicionIva
+                : documentoCompleto && !condicionIva
                   ? "Elegí condición frente al IVA"
-              : `Facturar ${pesos(estado.totales.totalAPagar)}`}
+              : sinFactura
+                ? `Registrar sin factura ${pesos(estado.totales.totalAPagar)}`
+                : `Facturar ${pesos(estado.totales.totalAPagar)}`}
         </button>
       </div>
       {estado.metodoPago === "mercadopago" ? (
         <p className="aviso pendiente">Débito o crédito por MercadoPago. La cobranza se registra automáticamente en MercadoPago.</p>
+      ) : estado.metodoPago === "efectivo" && sinFactura ? (
+        <p className="aviso pendiente">Sin factura: se registra como Cotización en Contabilium (no va a ARCA). Después registrá la cobranza igual que en Efectivo.</p>
       ) : estado.metodoPago === "efectivo" ? (
         <p className="aviso pendiente">Efectivo, transferencia o ambos. Registrá la cobranza manualmente en Contabilium.</p>
       ) : estado.metodoPago === "otros" ? (
@@ -311,10 +334,10 @@ function FacturaEmitida({ factura, estado, ejecutar, onNueva }) {
   return (
     <div className="factura-ok">
       <h2>
-        ✓ {factura.tipo} emitida{factura.prueba && " (PRUEBA)"}
+        ✓ {factura.tipo} {factura.cotizacion ? "registrada" : "emitida"}{factura.prueba && " (PRUEBA)"}
       </h2>
       <p>
-        N° {factura.numero} · CAE {factura.cae}
+        N° {factura.numero}{factura.cae && ` · CAE ${factura.cae}`}
       </p>
       <p>
         {factura.cliente.nombre} {factura.cliente.documento}
@@ -322,7 +345,7 @@ function FacturaEmitida({ factura, estado, ejecutar, onNueva }) {
       <p className="total">{pesos(factura.total)}</p>
       {factura.cobranza?.estado === "pendiente" && (
         <div className="aviso pendiente">
-          <strong>Factura emitida · cobranza pendiente</strong>
+          <strong>{factura.cotizacion ? "Cotización registrada" : "Factura emitida"} · cobranza pendiente</strong>
           <p>Completá los medios y los importes para registrar el cobro.</p>
         </div>
       )}
@@ -337,7 +360,7 @@ function FacturaEmitida({ factura, estado, ejecutar, onNueva }) {
       {factura.advertencia && <div className="aviso error">{factura.advertencia}</div>}
       {factura.url && (
         <a href={factura.url} target="_blank" rel="noreferrer">
-          Ver / imprimir factura
+          Ver / imprimir {factura.cotizacion ? "comprobante" : "factura"}
         </a>
       )}
       <button className="primario" onClick={onNueva} disabled={estado.fase === "cobrando"}>

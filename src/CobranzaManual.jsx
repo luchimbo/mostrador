@@ -23,7 +23,7 @@ export default function CobranzaManual({ factura, destinos, bloqueado, ejecutar 
   }
   return <form className="cobranza-manual" onSubmit={guardar}>
     <h3>Registrar cobranza</h3>
-    <p>Factura {factura.numero} · {factura.cliente.nombre}</p>
+    <p>{factura.cotizacion ? "Cotización" : "Factura"} {factura.numero} · {factura.cliente.nombre}</p>
     <p>Asigná el importe recibido a cada medio y su destino.</p>
     {incierta && <p className="aviso error">Revisá esta cobranza en Contabilium antes de continuar. No se repetirá desde la app.</p>}
     <fieldset disabled={bloqueado || incierta}>

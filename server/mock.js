@@ -102,6 +102,13 @@ export async function emitirFactura(payload) {
 }
 
 export const emitirFacturaCobrada = emitirFactura;
+export async function emitirCotizacion(payload) {
+  await esperar(800);
+  const numero = String(nextNumero++).padStart(8, "0");
+  const total = Math.round(payload.Items.reduce((sum, l) => sum + l.Cantidad * l.PrecioUnitario * (1 + l.Iva / 100) * (1 - l.Bonificacion / 100), 0) * 100) / 100;
+  comprobantesPrueba.set(900000 + Number(numero), { TipoFc: payload.TipoFc, ImporteTotalNeto: total, Saldo: total });
+  return { idComprobante: 900000 + Number(numero), numero: `COT-0099-${numero}`, url: "", total };
+}
 export async function obtenerConfiguracionFacturacion(metodo) {
   return { condicionVenta: metodo === "mercadopago" ? "MercadoPago" : metodo === "otros" ? "Otro" : "Efectivo", automatico: metodo === "mercadopago" };
 }

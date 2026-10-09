@@ -1,5 +1,8 @@
 import { round2 } from "./pricing.js";
 
+// Una factura queda emitida con CAE; una cotización (venta sin factura) no pasa por ARCA.
+export const comprobanteEmitido = (f) => Boolean(f?.idComprobante && (f.cae || f.cotizacion));
+
 export function importeContabilium(valor) {
   if (typeof valor === "number") return valor;
   const texto = String(valor ?? "").trim();
@@ -10,7 +13,7 @@ export function importeContabilium(valor) {
 }
 
 export function armarCobranza(factura, pagos, destinos) {
-  if (!factura?.cae || !factura.idComprobante || factura.cobranza?.modalidad !== "manual") throw new Error("Esta factura no admite cobranza manual desde el mostrador.");
+  if (!comprobanteEmitido(factura) || factura.cobranza?.modalidad !== "manual") throw new Error("Esta factura no admite cobranza manual desde el mostrador.");
   if (factura.cobranza.estado !== "pendiente") throw new Error("Esta cobranza ya fue registrada o requiere revisión.");
   if (!Array.isArray(pagos) || !pagos.length || pagos.length > 10) throw new Error("Agregá los medios utilizados para cobrar.");
   const permitidos = factura.metodoPago === "efectivo" ? ["efectivo", "transferencia"] : ["efectivo", "transferencia", "mercadopago"];
@@ -30,7 +33,10 @@ export function armarCobranza(factura, pagos, destinos) {
 export async function registrarCobranza({ factura, pagos, destinos, backend, antesDeEnviar = () => {} }) {
   const payload = armarCobranza(factura, pagos, destinos);
   const actual = await backend.consultarComprobante(factura.idComprobante);
-  if (String(actual.Cae || actual.CAE || "") !== String(factura.cae)) throw new Error("La factura de Contabilium no coincide con la emitida. Revisala antes de cobrar.");
+  if (factura.cotizacion) {
+    const tipo = actual?.TipoFc ?? actual?.Tipo;
+    if (!actual || (tipo && tipo !== factura.tipoFc) || actual.Cae || actual.CAE) throw new Error("El comprobante de Contabilium no coincide con la cotización registrada. Revisalo antes de cobrar.");
+  } else if (String(actual.Cae || actual.CAE || "") !== String(factura.cae)) throw new Error("La factura de Contabilium no coincide con la emitida. Revisala antes de cobrar.");
   const total = importeContabilium(actual.ImporteTotalNeto);
   const saldo = importeContabilium(actual.Saldo);
   if (Math.round(total * 100) !== Math.round(factura.total * 100)) throw new Error("El total de Contabilium difiere del mostrador. Revisá la factura antes de cobrar.");
