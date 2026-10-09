@@ -78,6 +78,8 @@ Doble clic en **`iniciar-mostrador.bat`**. Levanta el servidor y abre las dos pa
 1. El vendedor agrega productos; el cliente los ve con precio final (IVA incluido, precio de la tienda online).
 2. Si hay reglas que aplican, el cliente ve "Para completar tu equipo" con el descuento. Si acepta, el vendedor toca **+ Agregar** en la sugerencia. El descuento vale mientras el producto que lo disparó siga en la venta.
 3. Medio de pago: **efectivo o transferencia aplican 5%** de descuento (configurable). Mientras no se elija, el cliente ve ambos totales.
+   - **Transferencia**: se cobra con la condición **MercadoPago** eligiendo *Forma de pago → Transferencia*. Lleva el descuento de contado y la cobranza se registra automáticamente, como con tarjeta.
+   - **Total a cobrar** (opcional): después de elegir la condición de venta, el vendedor puede escribir un total menor para redondear (por ejemplo $235.500), o usar los botones que redondean a miles. Enter aplica el ajuste, no factura. El cliente lo ve como "Redondeo". La factura suma exactamente ese total: cada producto lleva su parte del precio final, sin bonificación. El ajuste se borra si cambian los productos o la condición de venta, y no puede superar el total de la venta.
 4. Ingresá el DNI o CUIT (obligatorio) y después elegí la condición frente al IVA:
    - Consumidor Final o Exento → Factura B, identificada con el documento ingresado
    - Responsable Inscripto o Monotributista → CUIT obligatorio y Factura A
@@ -97,7 +99,7 @@ El mostrador muestra **solo los productos publicados en la tienda online** (Tien
 | Foto | Tienda online (si Contabilium tiene foto, esa tiene prioridad) |
 | Id del producto (stock), IVA, costo, nombre en la factura | Contabilium |
 
-La tienda se lee del sitemap público y de los datos de cada página de producto, sin claves. Se actualiza al iniciar, **cada hora**, o a mano desde **Ajustes → Tienda online**, donde también figuran los productos publicados que no tienen un código igual en Contabilium. El costo interno de Contabilium está en dólares, así que se pasa a pesos usando la rentabilidad cargada (precio neto ÷ (1 + rentabilidad)).
+La tienda se lee del sitemap público y de los datos de cada página de producto, sin claves. Se actualiza al iniciar, **cada 30 minutos**, o a mano con **Actualizar precios** en la pantalla del vendedor (lee la tienda y Contabilium; tarda alrededor de un minuto) o desde **Ajustes → Tienda online**, donde también figuran los productos publicados que no tienen un código igual en Contabilium. El costo interno de Contabilium está en dólares, así que se pasa a pesos usando la rentabilidad cargada (precio neto ÷ (1 + rentabilidad)).
 
 En modo real, la primera vez se precargan reglas de ejemplo (controladores, pianos, sintes, micrófonos, interfaces, cuerdas) con productos reales; se editan en **Ajustes → Recomendaciones**.
 

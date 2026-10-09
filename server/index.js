@@ -31,16 +31,23 @@ function indexar(productos) {
   return new Map(visibles.map((p) => [String(p.id), p]));
 }
 
-async function actualizarTienda() {
-  try {
-    await sincronizarTienda();
-    productsById = indexar(catalogo.productos);
-    errorTienda = null;
-  } catch (err) {
-    errorTienda = err.message;
-    console.error("[tiendanube] error:", err.message);
-  }
-  broadcast();
+// Si ya hay una lectura de la tienda en curso, se espera esa en lugar de empezar otra.
+let leyendoTienda = null;
+function actualizarTienda() {
+  leyendoTienda ??= (async () => {
+    try {
+      await sincronizarTienda();
+      productsById = indexar(catalogo.productos);
+      errorTienda = null;
+    } catch (err) {
+      errorTienda = err.message;
+      console.error("[tiendanube] error:", err.message);
+    } finally {
+      leyendoTienda = null;
+    }
+    broadcast();
+  })();
+  return leyendoTienda;
 }
 
 async function actualizarCatalogo() {
@@ -186,7 +193,9 @@ async function accionFacturar(datosCliente) {
       url: res.url,
       cobranza: res.cobranza,
       total: res.total,
+      ajusteTotal: snapshot.totales.ajuste || 0,
       metodoPago: snapshot.metodoPago,
+      transferencia: snapshot.metodoPago === "mercadopago" && snapshot.transferencia,
       tipo: res.tipo,
       condicionVenta: res.condicionVenta,
       prueba: res.prueba,
@@ -247,6 +256,8 @@ const ACCIONES = {
   quitar: ({ lineId }) => sale.quitar(lineId),
   metodoPago: ({ metodo }) => sale.setMetodoPago(metodo),
   sinFactura: ({ valor }) => sale.setSinFactura(valor),
+  transferencia: ({ valor }) => sale.setTransferencia(valor),
+  ajustarTotal: ({ total }) => sale.ajustarTotal(total, getSettings()),
   cancelar: () => {
     if (["facturando", "cobrando"].includes(sale.fase)) throw new Error("Esperá a que termine la operación en curso.");
     writeJson("factura-en-cobranza.json", null);
@@ -262,7 +273,7 @@ io.on("connection", (socket) => {
     const fn = ACCIONES[msg?.tipo];
     try {
       if (!fn) throw new Error(`Acción desconocida: ${msg?.tipo}`);
-      if (["cantidad", "quitar", "metodoPago", "sinFactura"].includes(msg.tipo) && ["facturando", "cobranza", "cobrando"].includes(sale.fase)) throw new Error("Terminá la factura y cobranza antes de modificar la venta.");
+      if (["cantidad", "quitar", "metodoPago", "sinFactura", "transferencia", "ajustarTotal"].includes(msg.tipo) && ["facturando", "cobranza", "cobrando"].includes(sale.fase)) throw new Error("Terminá la factura y cobranza antes de modificar la venta.");
       const res = await fn(msg);
       ack({ ok: true, ...(res || {}) });
     } catch (err) {
@@ -280,6 +291,13 @@ app.get("/api/catalogo", (_req, res) => res.json({ ...catalogo, productos: [...p
 app.post("/api/catalogo/actualizar", async (_req, res) => {
   await actualizarCatalogo();
   res.json({ ok: !errorCatalogo, error: errorCatalogo, cantidad: productsById.size });
+});
+
+// Botón del vendedor: precios de la tienda (Tiendanube) y productos de Contabilium.
+app.post("/api/precios/actualizar", async (_req, res) => {
+  await Promise.all([actualizarCatalogo(), actualizarTienda()]);
+  const error = [errorCatalogo, errorTienda && `Tienda online: ${errorTienda}`].filter(Boolean).join(" · ") || null;
+  res.json({ ok: !error, error, ...estadoTienda() });
 });
 
 app.post("/api/tienda/actualizar", async (_req, res) => {

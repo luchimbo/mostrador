@@ -96,6 +96,9 @@ s { color: var(--gris); margin-right: 6px; font-weight: 400; }
 .cobro label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
 .cobro label small { color: var(--gris); font-weight: 400; }
 .cobro label input { font-size: 1.1em; }
+.ajuste-total { display: flex; flex-direction: column; gap: 4px; }
+.fila-ajuste { display: flex; gap: 6px; flex-wrap: wrap; }
+.fila-ajuste input { flex: 1; min-width: 120px; font-size: 1.1em; }
 .datos-nuevos { display: flex; flex-direction: column; gap: 6px; background: var(--fondo); padding: 10px; border-radius: 8px; }
 .datos-nuevos p { margin: 0; font-size: 0.9em; }
 .acciones { display: flex; gap: 8px; justify-content: space-between; }

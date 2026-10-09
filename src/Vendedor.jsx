@@ -16,10 +16,12 @@ export default function Vendedor() {
   const [mensaje, setMensaje] = useState(null);
   const buscador = useRef(null);
 
+  // Se recarga la lista cuando cambia Contabilium o los precios de la tienda.
   const actualizado = estado?.catalogo.actualizado;
+  const tiendaActualizada = estado?.catalogo.tienda.actualizado;
   useEffect(() => {
     api("/catalogo").then((c) => setProductos(c.productos));
-  }, [actualizado]);
+  }, [actualizado, tiendaActualizada]);
 
   const rubros = useMemo(() => [...new Set(productos.map((p) => p.rubro))].sort(), [productos]);
   const visibles = useMemo(
@@ -95,11 +97,11 @@ export default function Vendedor() {
               <span className="error">Error al actualizar catálogo: {estado.catalogo.error}</span>
             ) : (
               <span>
-                {estado.catalogo.cantidad} productos ({estado.catalogo.conImagen} con foto) · actualizado{" "}
-                {actualizado ? new Date(actualizado).toLocaleTimeString("es-AR") : "nunca"}
+                {estado.catalogo.cantidad} productos ({estado.catalogo.conImagen} con foto) · precios de la tienda{" "}
+                {estado.catalogo.tienda.actualizado ? new Date(estado.catalogo.tienda.actualizado).toLocaleTimeString("es-AR") : "sin leer"}
               </span>
             )}
-            <button onClick={() => api("/catalogo/actualizar", { method: "POST" })}>Actualizar ahora</button>
+            <ActualizarPrecios />
             <a href="/admin" target="_blank" rel="noreferrer">
               Ajustes
             </a>
@@ -202,13 +204,55 @@ function Totales({ totales }) {
       )}
       {totales.aplicaContado && (
         <div className="descuento">
-          <span>Descuento efectivo/transferencia ({totales.descuentoContadoPct}%)</span>
+          <span>Descuento contado ({totales.descuentoContadoPct}%)</span>
           <span>−{pesos(totales.descuentoContado)}</span>
+        </div>
+      )}
+      {totales.ajuste < 0 && (
+        <div className="descuento">
+          <span>Ajuste del vendedor</span>
+          <span>−{pesos(-totales.ajuste)}</span>
         </div>
       )}
       <div className="total">
         <span>Total</span>
         <span>{pesos(totales.totalAPagar)}</span>
+      </div>
+    </div>
+  );
+}
+
+// Total final escrito por el vendedor (ej. redondear en efectivo). Solo puede bajar el total.
+function AjusteTotal({ estado, bloqueado, ejecutar }) {
+  const [valor, setValor] = useState("");
+  const { totales } = estado;
+  const sinAjuste = totales.totalSinAjuste ?? totales.totalAPagar;
+  const redondeos = [1000, 10000].map((m) => Math.floor(sinAjuste / m) * m).filter((v, i, a) => v > 0 && v < sinAjuste && a.indexOf(v) === i);
+  async function aplicar(total) {
+    const res = await ejecutar("ajustarTotal", { total });
+    if (res.ok) setValor("");
+  }
+  const numero = Number(valor.replace(/\./g, "").replace(",", "."));
+  return (
+    <div className="ajuste-total">
+      <label>
+        Total a cobrar <small>Opcional: para redondear. Sin ajuste: {pesos(sinAjuste)}</small>
+      </label>
+      <div className="fila-ajuste">
+        <input
+          inputMode="decimal"
+          placeholder={String(sinAjuste)}
+          value={valor}
+          disabled={bloqueado}
+          onChange={(e) => setValor(e.target.value)}
+          // Enter aplica el ajuste; no factura.
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (numero > 0) aplicar(numero); } }}
+        />
+        <button type="button" disabled={bloqueado || !(numero > 0)} onClick={() => aplicar(numero)}>Aplicar</button>
+        {redondeos.map((v) => (
+          <button type="button" key={v} disabled={bloqueado} onClick={() => aplicar(v)}>{pesos(v)}</button>
+        ))}
+        {totales.ajuste < 0 && <button type="button" className="secundario" disabled={bloqueado} onClick={() => aplicar(null)}>Quitar ajuste</button>}
       </div>
     </div>
   );
@@ -250,6 +294,19 @@ function Cobro({ estado, bloqueado, ejecutar }) {
           </button>
         ))}
       </div>
+      {estado.metodoPago === "mercadopago" && (
+        <>
+          <label>Forma de pago</label>
+          <div className="metodos">
+            <button type="button" disabled={bloqueado} className={!estado.transferencia ? "activo" : ""} onClick={() => ejecutar("transferencia", { valor: false })}>
+              Tarjeta
+            </button>
+            <button type="button" disabled={bloqueado} className={estado.transferencia ? "activo" : ""} onClick={() => ejecutar("transferencia", { valor: true })}>
+              Transferencia ({estado.totales.descuentoContadoPct}% desc.)
+            </button>
+          </div>
+        </>
+      )}
       {estado.metodoPago === "efectivo" && (
         <>
           <label>Comprobante</label>
@@ -263,6 +320,7 @@ function Cobro({ estado, bloqueado, ejecutar }) {
           </div>
         </>
       )}
+      {estado.metodoPago && <AjusteTotal estado={estado} bloqueado={bloqueado} ejecutar={ejecutar} />}
       <label>
         DNI o CUIT{" "}
         <small>{documentoCompleto ? `(${tipo})` : sinFactura ? "Opcional sin factura" : "Obligatorio para facturar"}</small>
@@ -317,7 +375,9 @@ function Cobro({ estado, bloqueado, ejecutar }) {
                 : `Facturar ${pesos(estado.totales.totalAPagar)}`}
         </button>
       </div>
-      {estado.metodoPago === "mercadopago" ? (
+      {estado.metodoPago === "mercadopago" && estado.transferencia ? (
+        <p className="aviso pendiente">Transferencia a MercadoPago, con descuento de contado. La cobranza se registra automáticamente en MercadoPago.</p>
+      ) : estado.metodoPago === "mercadopago" ? (
         <p className="aviso pendiente">Débito o crédito por MercadoPago. La cobranza se registra automáticamente en MercadoPago.</p>
       ) : estado.metodoPago === "efectivo" && sinFactura ? (
         <p className="aviso pendiente">Sin factura: se registra como Cotización en Contabilium (no va a ARCA). Después registrá la cobranza igual que en Efectivo.</p>
@@ -367,5 +427,29 @@ function FacturaEmitida({ factura, estado, ejecutar, onNueva }) {
         {factura.cobranza?.estado === "pendiente" ? "Dejar cobranza pendiente y abrir nueva venta" : "Nueva venta"}
       </button>
     </div>
+  );
+}
+
+// Vuelve a leer los precios de la tienda online y los productos de Contabilium (también se hace solo cada 30 minutos).
+function ActualizarPrecios() {
+  const [leyendo, setLeyendo] = useState(false);
+  const [error, setError] = useState(null);
+  async function actualizar() {
+    setLeyendo(true);
+    setError(null);
+    try {
+      const res = await api("/precios/actualizar", { method: "POST" });
+      if (!res.ok) setError(res.error);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLeyendo(false);
+    }
+  }
+  return (
+    <>
+      <button disabled={leyendo} onClick={actualizar}>{leyendo ? "Leyendo la tienda…" : "Actualizar precios"}</button>
+      {error && <span className="error">{error}</span>}
+    </>
   );
 }

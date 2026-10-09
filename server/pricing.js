@@ -12,8 +12,9 @@ export const METODOS_PAGO = {
   credito: { nombre: "Tarjeta de crédito", contado: false },
 };
 
-export function esContado(metodo) {
-  return Boolean(METODOS_PAGO[metodo]?.contado);
+// Transferencia por MercadoPago: se factura con la condición MercadoPago pero lleva el descuento de contado.
+export function esContado(metodo, { transferencia = false } = {}) {
+  return Boolean(METODOS_PAGO[metodo]?.contado) || (metodo === "mercadopago" && transferencia);
 }
 
 // Combina dos descuentos sucesivos (ej: 10% recomendación + 5% contado = 14,5%).
@@ -41,7 +42,7 @@ export function calcularLinea(line) {
   return { bruto, descuento, total: round2(bruto - descuento) };
 }
 
-export function calcularTotales(lines, metodoPago, settings) {
+export function calcularTotales(lines, metodoPago, settings, { transferencia = false } = {}) {
   let subtotal = 0;
   let descuentoRecomendaciones = 0;
   for (const line of lines) {
@@ -54,7 +55,7 @@ export function calcularTotales(lines, metodoPago, settings) {
   const total = round2(subtotal - descuentoRecomendaciones);
   const descuentoContado = round2(total * settings.descuentoContadoPct / 100);
   const totalContado = round2(total - descuentoContado);
-  const aplicaContado = esContado(metodoPago);
+  const aplicaContado = esContado(metodoPago, { transferencia });
   return {
     subtotal,
     descuentoRecomendaciones,
@@ -65,4 +66,15 @@ export function calcularTotales(lines, metodoPago, settings) {
     descuentoContado: aplicaContado ? descuentoContado : 0,
     totalAPagar: aplicaContado ? totalContado : total,
   };
+}
+
+// Total ajustado por el vendedor: se reparte entre las líneas en proporción a lo que
+// pagaría cada una (con descuentos). Los centavos que sobran van a la línea más grande.
+export function repartirTotal(lines, pctContado, total) {
+  const bases = lines.map((l) => calcularLinea(l).total * (1 - (pctContado || 0) / 100));
+  const suma = bases.reduce((a, b) => a + b, 0);
+  const partes = bases.map((b) => round2(suma ? (total * b) / suma : total / lines.length));
+  const mayor = bases.indexOf(Math.max(...bases));
+  partes[mayor] = round2(partes[mayor] + total - partes.reduce((a, b) => a + b, 0));
+  return partes;
 }

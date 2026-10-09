@@ -116,14 +116,22 @@ function Venta({ estado }) {
         </ul>
         <div className="totales-cliente">
           {totales.descuentoRecomendaciones > 0 && (
-            <div className="ahorro">Ahorrás {pesos(totales.descuentoRecomendaciones + totales.descuentoContado)}</div>
+            <div className="ahorro">Ahorrás {pesos(totales.descuentoRecomendaciones + totales.descuentoContado - Math.min(totales.ajuste || 0, 0))}</div>
           )}
-          {totales.aplicaContado ? (
+          {totales.aplicaContado || totales.ajuste < 0 ? (
             <>
-              <div className="fila">
-                <span>Descuento {estado.metodoPago} {totales.descuentoContadoPct}%</span>
-                <span>−{pesos(totales.descuentoContado)}</span>
-              </div>
+              {totales.aplicaContado && (
+                <div className="fila">
+                  <span>Descuento {estado.transferencia ? "transferencia" : estado.metodoPago} {totales.descuentoContadoPct}%</span>
+                  <span>−{pesos(totales.descuentoContado)}</span>
+                </div>
+              )}
+              {totales.ajuste < 0 && (
+                <div className="fila">
+                  <span>Redondeo</span>
+                  <span>−{pesos(-totales.ajuste)}</span>
+                </div>
+              )}
               <div className="total">
                 <span>Total</span>
                 <span>{pesos(totales.totalAPagar)}</span>
