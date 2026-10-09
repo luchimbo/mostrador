@@ -13,6 +13,7 @@
     "probar-borrador": "node scripts/probar-borrador.js"
   },
   "dependencies": {
+    "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "qrcode": "^1.5.4",
     "socket.io": "^4.8.4"

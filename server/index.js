@@ -14,6 +14,7 @@ import { combinarConTienda, estadoTienda, sincronizarTienda, tiendaSinContabiliu
 import { productosEnReposo } from "../shared/display.js";
 import { incluirProductosPrueba } from "./catalog.js";
 import { comprobanteEmitido, registrarCobranza } from "./cobranza.js";
+import { filasReporte, generarReporteExcel } from "./reporte.js";
 
 const backend = config.mode === "real" ? contabilium : mock;
 const facturador = config.facturacionSimulada ? mock : contabilium;
@@ -354,6 +355,33 @@ app.get("/api/facturas", (_req, res) => {
     url: v.url, cobranza: cobranzas.get(String(v.idComprobante)) || v.cobranza, prueba: v.prueba,
     condicionVenta: v.condicionVenta,
   })));
+});
+
+// Fechas del informe en hora de Argentina (UTC-3): "hasta" incluye el día completo.
+const inicioDiaAR = (fecha, dias = 0) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha || "")) return undefined;
+  const d = new Date(`${fecha}T03:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + dias);
+  return d.toISOString();
+};
+
+// El informe se guarda en la carpeta "informes" del mostrador (no se sube a GitHub).
+app.post("/api/reporte", async (req, res) => {
+  try {
+    const { desde, hasta } = req.body || {};
+    const ventas = readLog("ventas.jsonl").filter((v) => !v.prueba || config.facturacionSimulada);
+    const filas = filasReporte(ventas, { desde: inicioDiaAR(desde), hasta: inicioDiaAR(hasta, 1) });
+    const ahora = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 16).replace(/[T:]/g, "-");
+    const rango = [desde, hasta].filter((f) => inicioDiaAR(f));
+    const nombre = `informe-ventas_${rango.length ? rango.join("_al_") : "completo"}_${ahora}.xlsx`;
+    const carpeta = path.join(ROOT, "informes");
+    fs.mkdirSync(carpeta, { recursive: true });
+    const archivo = path.join(carpeta, nombre);
+    fs.writeFileSync(archivo, Buffer.from(await generarReporteExcel(filas)));
+    res.json({ archivo, ventas: filas.length });
+  } catch (err) {
+    res.status(500).json({ error: `No se pudo guardar el informe: ${err.message}` });
+  }
 });
 
 app.post("/api/facturas/:id/retomar", (req, res) => {

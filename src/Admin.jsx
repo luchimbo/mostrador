@@ -54,6 +54,7 @@ function FacturasEmitidas() {
     <h2>Facturas emitidas</h2>
     <p>MercadoPago registra la cobranza automáticamente. Efectivo y Otros requieren cobranza manual. Este historial no verifica cobros cargados posteriormente en Contabilium.</p>
     <button onClick={cargar}>Actualizar</button>
+    <InformeExcel />
     {error && <p className="aviso error">{error}</p>}
     {!facturas ? <p>Cargando facturas…</p> : !facturas.length ? <p>Todavía no hay facturas registradas.</p> :
       <div className="historial-facturas"><table>
@@ -72,6 +73,26 @@ function FacturasEmitidas() {
         </tr>)}</tbody>
       </table></div>}
   </section>;
+}
+
+function InformeExcel() {
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
+  const [estado, setEstado] = useState(null);
+  async function guardar() {
+    setEstado({ guardando: true });
+    try { setEstado(await api("/reporte", { method: "POST", body: { desde, hasta } })); }
+    catch (err) { setEstado({ error: err.message }); }
+  }
+  return <div className="informe-excel">
+    <h3>Informe de ventas en Excel</h3>
+    <p>Fecha, comprobante, producto principal, productos agregados por recomendación, precio total y precio de los agregados. Sin fechas incluye todas las ventas. Se guarda en la carpeta <b>informes</b> del mostrador.</p>
+    <label>Desde <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} /></label>
+    <label>Hasta <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} /></label>
+    <button className="primario" disabled={estado?.guardando} onClick={guardar}>{estado?.guardando ? "Guardando…" : "Guardar Excel"}</button>
+    {estado?.archivo && <p className="aviso ok">Informe guardado ({estado.ventas} ventas): <code>{estado.archivo}</code></p>}
+    {estado?.error && <p className="aviso error">{estado.error}</p>}
+  </div>;
 }
 
 function SelectorProducto({ productos, onElegir, excluir = [] }) {

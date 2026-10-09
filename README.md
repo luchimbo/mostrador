@@ -131,6 +131,8 @@ Con condición **Efectivo**, el vendedor puede elegir **Sin factura (cotización
 
 La factura y su estado de cobranza sobreviven a un reinicio en factura-en-cobranza.json. La condición y modalidad quedan en ventas.jsonl, y la cobranza registrada o incierta en cobranzas.jsonl. El agradecimiento y QR de opiniones aparecen después de guardar la cobranza manual. También se puede dejar pendiente y retomarla desde Ajustes → Facturas emitidas. Las cobranzas automáticas con CAE y error conservan la factura y requieren revisar el cobro.
 
+En **Ajustes → Facturas emitidas → Informe de ventas en Excel**, el botón **Guardar Excel** guarda un `.xlsx` en la carpeta `informes` del mostrador (por ejemplo `D:\Mostrador\informes`), en la computadora donde corre el servidor. Cada informe lleva en el nombre el rango y la hora en que se generó. La carpeta no se sube a GitHub. El archivo tiene una fila por venta: fecha, comprobante, producto principal, productos agregados (los que entraron por una recomendación aceptada), precio total y precio de los agregados, más una fila de totales. Se puede filtrar por rango de fechas; sin fechas incluye todas. Los precios son lo cobrado: con Efectivo, el descuento de contado se reparte en proporción entre los productos.
+
 Las facturas quedan disponibles en Ajustes → Facturas emitidas, incluso después de iniciar otra venta. Ese historial se actualiza con cobranzas hechas desde la app; no comprueba cobros cargados posteriormente en Contabilium hasta que se intenta retomar la cobranza.
 
 Si falla la emisión después de crear el borrador, su ID se conserva en el error y en data/real/facturas-pendientes.jsonl. Revisalo en Contabilium antes de iniciar otra emisión. Una factura con CAE no se vuelve a emitir aunque haya una advertencia.

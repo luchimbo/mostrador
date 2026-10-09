@@ -3,6 +3,7 @@ dist/
 .env*
 !.env.example
 data/
+informes/
 referencias/
 
 # Separate migration prototype; the root app is the maintained counter.
