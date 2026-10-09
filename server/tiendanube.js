@@ -144,8 +144,48 @@ export async function sincronizarTienda() {
   return estadoTienda();
 }
 
+// Precios del listado de productos (/productos/?page=N). Las páginas de producto quedan hasta 24 h
+// en el caché de Cloudflare, pero el listado con un parámetro desconocido se genera en el momento.
+// Cada tarjeta trae su SKU (JSON-LD), el precio de venta en centavos y el precio tachado si hay oferta.
+export function extraerPreciosListado(html) {
+  const precios = [];
+  for (const tarjeta of html.split(/(?=<div class="js-item-product)/).slice(1)) {
+    const sku = tarjeta.match(/"sku":\s*"([^"]+)"/)?.[1];
+    const centavos = Number(tarjeta.match(/data-product-price="(\d+)"/)?.[1]);
+    if (!sku || !(centavos > 0)) continue;
+    const tachado = tarjeta.match(/js-compare-price-display[^"]*"(?![^>]*display:\s*none)[^>]*>\s*\$?\s*([\d.,]+)/)?.[1];
+    const lista = tachado ? Number(tachado.replace(/\./g, "").replace(",", ".")) : 0;
+    const precio = centavos / 100;
+    precios.push({ sku: normalizarSku(decodificar(sku)), precio, precioLista: lista > precio ? lista : null });
+  }
+  return precios;
+}
+
+export async function actualizarPreciosTienda() {
+  const base = config.tiendanubeUrl.replace(/\/+$/, "");
+  const marca = Date.now();
+  const nuevos = {};
+  for (let pagina = 1; pagina <= 100; pagina++) {
+    const precios = extraerPreciosListado(await texto(`${base}/productos/?page=${pagina}&mostrador=${marca}`));
+    if (!precios.length) break;
+    for (const p of precios) nuevos[p.sku] ??= p;
+  }
+  if (!Object.keys(nuevos).length) throw new Error("No se pudieron leer los precios del listado de la tienda.");
+  let cambiados = 0;
+  for (const p of Object.values(nuevos)) {
+    const actual = indice.porSku[p.sku];
+    if (!actual) continue; // producto nuevo: aparece en la próxima lectura completa
+    if (actual.precio !== p.precio || (actual.precioLista ?? null) !== p.precioLista) cambiados++;
+    Object.assign(actual, { precio: p.precio, precioLista: p.precioLista });
+  }
+  indice = { ...indice, preciosActualizados: new Date().toISOString() };
+  writeJson(ARCHIVO, indice);
+  console.log(`[tiendanube] precios del listado: ${Object.keys(nuevos).length} productos, ${cambiados} cambiaron`);
+  return { leidos: Object.keys(nuevos).length, cambiados };
+}
+
 export function estadoTienda() {
-  return { actualizado: indice.actualizado, skus: Object.keys(indice.porSku).length };
+  return { actualizado: indice.preciosActualizados || indice.actualizado, completo: indice.actualizado, skus: Object.keys(indice.porSku).length };
 }
 
 // Combina el catálogo de Contabilium con la tienda:

@@ -352,7 +352,8 @@ function Tienda({ productos, onActualizado }) {
     <section>
       <p className="ayuda">
         El mostrador muestra los productos publicados en la tienda online (Tiendanube), con su <b>precio</b>, <b>categoría</b> y{" "}
-        <b>foto</b>. Se empareja el SKU de la tienda con el código del producto en Contabilium. Se actualiza cada hora.
+        <b>foto</b>. Se empareja el SKU de la tienda con el código del producto en Contabilium. Los precios se actualizan cada 30
+        minutos (o con "Actualizar precios" en la pantalla del vendedor); categorías, fotos y productos nuevos, una vez por día o con este botón (tarda unos minutos).
       </p>
       <div className="acciones-imagenes">
         <button className="primario" disabled={cargando} onClick={actualizar}>

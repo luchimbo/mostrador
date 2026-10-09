@@ -10,7 +10,7 @@ import { facturar } from "./invoice.js";
 import * as mock from "./mock.js";
 import { Sale } from "./sale.js";
 import { appendLog, getSettings, readJson, readLog, saveSettings, writeJson } from "./store.js";
-import { combinarConTienda, estadoTienda, sincronizarTienda, tiendaSinContabilium } from "./tiendanube.js";
+import { actualizarPreciosTienda, combinarConTienda, estadoTienda, sincronizarTienda, tiendaSinContabilium } from "./tiendanube.js";
 import { productosEnReposo } from "../shared/display.js";
 import { incluirProductosPrueba } from "./catalog.js";
 import { comprobanteEmitido, registrarCobranza } from "./cobranza.js";
@@ -32,11 +32,14 @@ function indexar(productos) {
 }
 
 // Si ya hay una lectura de la tienda en curso, se espera esa en lugar de empezar otra.
+// completa: las ~300 páginas de producto (categorías, fotos, productos nuevos). Esas páginas pueden
+// venir del caché de Cloudflare con precios de hasta 24 h, así que después se leen los precios del listado.
 let leyendoTienda = null;
-function actualizarTienda() {
+function actualizarTienda({ completa = false } = {}) {
   leyendoTienda ??= (async () => {
     try {
-      await sincronizarTienda();
+      if (completa) await sincronizarTienda();
+      await actualizarPreciosTienda();
       productsById = indexar(catalogo.productos);
       errorTienda = null;
     } catch (err) {
@@ -301,7 +304,7 @@ app.post("/api/precios/actualizar", async (_req, res) => {
 });
 
 app.post("/api/tienda/actualizar", async (_req, res) => {
-  await actualizarTienda();
+  await actualizarTienda({ completa: true });
   res.json({ ok: !errorTienda, error: errorTienda, ...estadoTienda() });
 });
 app.get("/api/tienda/faltantes", (_req, res) => res.json(tiendaSinContabilium(catalogo.productos)));
@@ -436,8 +439,9 @@ server.listen(config.port, () => {
 actualizarCatalogo();
 setInterval(actualizarCatalogo, config.catalogRefreshMinutes * 60_000);
 
-// Tienda online (precios, categorías y fotos): al arrancar si está desactualizada, y después periódicamente.
-const intervaloTienda = config.tiendaRefreshMinutes * 60_000;
-const ultimaSync = Date.parse(estadoTienda().actualizado || 0) || 0;
-if (Date.now() - ultimaSync > intervaloTienda) actualizarTienda();
-setInterval(actualizarTienda, intervaloTienda);
+// Tienda online: precios al arrancar y cada 30 min; lectura completa (categorías y fotos) una vez por día.
+const intervaloCompleto = config.tiendaRefreshMinutes * 60_000;
+const ultimaCompleta = Date.parse(estadoTienda().completo || 0) || 0;
+actualizarTienda({ completa: Date.now() - ultimaCompleta > intervaloCompleto });
+setInterval(() => actualizarTienda(), config.preciosRefreshMinutes * 60_000);
+setInterval(() => actualizarTienda({ completa: true }), intervaloCompleto);

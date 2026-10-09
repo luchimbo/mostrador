@@ -33,5 +33,7 @@ export const config = {
   tiendanubeUrl: env.TIENDANUBE_URL || "https://www.pcmidi.com.ar",
   dataDir: path.join(ROOT, "data", mode),
   catalogRefreshMinutes: 10,
-  tiendaRefreshMinutes: 30,
+  // Precios desde el listado de la tienda (rápido y sin caché); lectura completa (categorías, fotos) una vez por día.
+  preciosRefreshMinutes: 30,
+  tiendaRefreshMinutes: 24 * 60,
 };
