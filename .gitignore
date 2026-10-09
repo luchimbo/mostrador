@@ -12,3 +12,4 @@ referencias/
 *.log
 .DS_Store
 Thumbs.db
+.claude/
