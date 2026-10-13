@@ -9,7 +9,7 @@ import * as contabilium from "./contabilium.js";
 import { facturar } from "./invoice.js";
 import * as mock from "./mock.js";
 import { Sale } from "./sale.js";
-import { appendLog, getSettings, readJson, readLog, saveSettings, writeJson } from "./store.js";
+import { almacenamiento, appendLog, getSettings, guardarCopia, readJson, readLog, saveSettings, writeJson } from "./store.js";
 import { actualizarPreciosTienda, combinarConTienda, estadoTienda, sincronizarTienda, tiendaSinContabilium } from "./tiendanube.js";
 import { productosEnReposo } from "../shared/display.js";
 import { incluirProductosPrueba } from "./catalog.js";
@@ -58,10 +58,10 @@ async function actualizarCatalogo() {
     const productos = await backend.descargarCatalogo();
     catalogo = { productos, actualizado: new Date().toISOString() };
     productsById = indexar(productos);
-    writeJson("catalogo.json", catalogo);
+    guardarCopia("catalogo.json", catalogo);
     if (reglasPendientes) {
       reglas = mock.reglasInicialesReales([...productsById.values()]);
-      writeJson("reglas.json", reglas);
+      await writeJson("reglas.json", reglas);
       reglasPendientes = false;
     }
     errorCatalogo = null;
@@ -79,7 +79,7 @@ let reglas = readJson("reglas.json", null);
 let reglasPendientes = !reglas && config.mode === "real";
 if (!reglas) {
   reglas = config.mode === "mock" ? mock.REGLAS_DEMO : [];
-  if (!reglasPendientes) writeJson("reglas.json", reglas);
+  if (!reglasPendientes) await writeJson("reglas.json", reglas);
 }
 let destacados = readJson("destacados.json", config.mode === "mock" ? ["102", "202", "301", "502", "701"] : []);
 
@@ -111,7 +111,7 @@ function finalizarVenta() {
 }
 
 function guardarFacturaEnCobranza(factura = sale.factura) {
-  writeJson("factura-en-cobranza.json", { ...factura, lineas: sale.lines, inicio: sale.inicio });
+  return writeJson("factura-en-cobranza.json", { ...factura, lineas: sale.lines, inicio: sale.inicio });
 }
 
 // Si no se eligieron destacados, se muestra el producto más caro con foto de cada categoría.
@@ -185,8 +185,8 @@ async function accionFacturar(datosCliente) {
     }
     sale.factura = res;
     sale.cliente = res.cliente;
-    if (res.cobranza?.modalidad === "manual") guardarFacturaEnCobranza(res);
-    appendLog("ventas.jsonl", {
+    // La factura ya está emitida: se intentan los dos guardados aunque uno falle.
+    const guardados = await Promise.allSettled([res.cobranza?.modalidad === "manual" && guardarFacturaEnCobranza(res), appendLog("ventas.jsonl", {
       fecha: new Date().toISOString(),
       inicio: sale.inicio,
       numero: res.numero,
@@ -206,7 +206,9 @@ async function accionFacturar(datosCliente) {
       venta: { lines: sale.lines, inicio: sale.inicio },
       lineas: snapshot.lines.map((l) => ({ productId: l.productId, nombre: l.nombre, cantidad: l.cantidad, total: l.total, reglaId: l.reglaId })),
       sugerenciasMostradas: [...sale.sugerenciasMostradas],
-    });
+    })]);
+    const fallo = guardados.find((g) => g.status === "rejected");
+    if (fallo) throw new Error(`El comprobante ${res.numero || res.idComprobante} se emitió, pero no se pudo guardar en el mostrador: ${fallo.reason.message}. Revisalo en Contabilium.`);
     if (res.cobranza?.modalidad === "manual") sale.fase = "cobranza";
     else finalizarVenta();
     return { ok: true, factura: res };
@@ -215,10 +217,10 @@ async function accionFacturar(datosCliente) {
     sale.error = err.message;
     if (err.idComprobante) {
       sale.comprobantePendiente = err.idComprobante;
-      appendLog("facturas-pendientes.jsonl", {
+      await appendLog("facturas-pendientes.jsonl", {
         fecha: new Date().toISOString(), idComprobante: err.idComprobante,
         error: err.message, total: snapshot.totales.totalAPagar, metodoPago: snapshot.metodoPago,
-      });
+      }).catch((e) => console.error("[datos] no se pudo guardar la factura pendiente:", e.message));
     }
     throw err;
   }
@@ -231,24 +233,24 @@ async function accionCobrar({ pagos }) {
   broadcast();
   try {
     const cobranza = await registrarCobranza({ factura: sale.factura, pagos, destinos: destinosCobranza(), backend: facturador,
-      antesDeEnviar: () => {
-        // Persistir el intento antes de mover dinero para no repetirlo tras un reinicio.
-        guardarFacturaEnCobranza({ ...sale.factura, cobranza: { ...sale.factura.cobranza, estado: "revisar" } });
-      },
+      // Persistir el intento antes de mover dinero para no repetirlo tras un reinicio.
+      antesDeEnviar: () => guardarFacturaEnCobranza({ ...sale.factura, cobranza: { ...sale.factura.cobranza, estado: "revisar" } }),
     });
     sale.factura.cobranza = cobranza;
-    appendLog("cobranzas.jsonl", { idComprobante: sale.factura.idComprobante, ...cobranza });
-    writeJson("factura-en-cobranza.json", null);
+    await appendLog("cobranzas.jsonl", { idComprobante: sale.factura.idComprobante, ...cobranza });
+    await writeJson("factura-en-cobranza.json", null);
     finalizarVenta();
     return { cobranza };
   } catch (err) {
-    if (err.cobranzaIncierta || sale.factura.cobranza.estado === "registrada") {
-      sale.factura.cobranza.estado = "revisar";
-      appendLog("cobranzas.jsonl", { idComprobante: sale.factura.idComprobante, ...sale.factura.cobranza });
-    }
-    guardarFacturaEnCobranza();
+    const revisar = err.cobranzaIncierta || sale.factura.cobranza.estado === "registrada";
+    if (revisar) sale.factura.cobranza.estado = "revisar";
     sale.fase = "cobranza";
     sale.error = err.message;
+    // Si tampoco se puede guardar, la venta queda en pantalla con el aviso para revisarla.
+    await Promise.allSettled([
+      revisar && appendLog("cobranzas.jsonl", { idComprobante: sale.factura.idComprobante, ...sale.factura.cobranza }),
+      guardarFacturaEnCobranza(),
+    ]);
     throw err;
   }
 }
@@ -261,9 +263,9 @@ const ACCIONES = {
   sinFactura: ({ valor }) => sale.setSinFactura(valor),
   transferencia: ({ valor }) => sale.setTransferencia(valor),
   ajustarTotal: ({ total }) => sale.ajustarTotal(total, getSettings()),
-  cancelar: () => {
+  cancelar: async () => {
     if (["facturando", "cobrando"].includes(sale.fase)) throw new Error("Esperá a que termine la operación en curso.");
-    writeJson("factura-en-cobranza.json", null);
+    await writeJson("factura-en-cobranza.json", null);
     sale.reset();
   },
   facturar: (datos) => accionFacturar(datos),
@@ -310,27 +312,28 @@ app.post("/api/tienda/actualizar", async (_req, res) => {
 app.get("/api/tienda/faltantes", (_req, res) => res.json(tiendaSinContabilium(catalogo.productos)));
 
 app.get("/api/reglas", (_req, res) => res.json(reglas));
-app.put("/api/reglas", (req, res) => {
+app.put("/api/reglas", async (req, res) => {
   if (!Array.isArray(req.body)) return res.status(400).json({ error: "Se esperaba una lista de reglas." });
+  await writeJson("reglas.json", req.body);
   reglas = req.body;
-  writeJson("reglas.json", reglas);
   broadcast();
   res.json(reglas);
 });
 
 app.get("/api/destacados", (_req, res) => res.json(destacados));
-app.put("/api/destacados", (req, res) => {
-  destacados = Array.isArray(req.body) ? req.body.map(String) : [];
-  writeJson("destacados.json", destacados);
+app.put("/api/destacados", async (req, res) => {
+  const nuevos = Array.isArray(req.body) ? req.body.map(String) : [];
+  await writeJson("destacados.json", nuevos);
+  destacados = nuevos;
   broadcast();
   res.json(destacados);
 });
 
 app.get("/api/ajustes", (_req, res) => res.json(getSettings()));
-app.put("/api/ajustes", (req, res) => {
+app.put("/api/ajustes", async (req, res) => {
   if (!req.body || Array.isArray(req.body) || typeof req.body !== "object") return res.status(400).json({ error: "Se esperaba un objeto de ajustes." });
   try {
-    const next = saveSettings(req.body || {});
+    const next = await saveSettings(req.body || {});
     broadcast();
     res.json(next);
   } catch (err) {
@@ -345,8 +348,8 @@ app.get("/api/opinion/qr", async (_req, res) => {
   res.type("png").send(await QRCode.toBuffer(url, { margin: 4, scale: 8 }));
 });
 
-app.get("/api/metricas", (_req, res) => {
-  const ventas = readLog("ventas.jsonl").filter((v) => !v.prueba || config.facturacionSimulada);
+app.get("/api/metricas", async (_req, res) => {
+  const ventas = (await readLog("ventas.jsonl")).filter((v) => !v.prueba || config.facturacionSimulada);
   const porRegla = {};
   for (const regla of reglas) porRegla[regla.id] = { nombre: regla.nombre, mostradas: 0, aceptadas: 0, ingresos: 0 };
   for (const v of ventas) {
@@ -368,9 +371,9 @@ app.get("/api/metricas", (_req, res) => {
   });
 });
 
-app.get("/api/facturas", (_req, res) => {
-  const cobranzas = new Map(readLog("cobranzas.jsonl").map(c => [String(c.idComprobante), c]));
-  res.json(readLog("ventas.jsonl").filter((v) => !v.prueba || config.facturacionSimulada).slice(-500).reverse().map((v) => ({
+app.get("/api/facturas", async (_req, res) => {
+  const cobranzas = new Map((await readLog("cobranzas.jsonl")).map(c => [String(c.idComprobante), c]));
+  res.json((await readLog("ventas.jsonl")).filter((v) => !v.prueba || config.facturacionSimulada).slice(-500).reverse().map((v) => ({
     fecha: v.fecha, numero: v.numero, idComprobante: v.idComprobante, tipo: v.tipo || v.factura?.tipo,
     cliente: v.cliente, total: v.total, metodoPago: v.metodoPago,
     url: v.url, cobranza: cobranzas.get(String(v.idComprobante)) || v.cobranza, prueba: v.prueba,
@@ -390,7 +393,7 @@ const inicioDiaAR = (fecha, dias = 0) => {
 app.post("/api/reporte", async (req, res) => {
   try {
     const { desde, hasta } = req.body || {};
-    const ventas = readLog("ventas.jsonl").filter((v) => !v.prueba || config.facturacionSimulada);
+    const ventas = (await readLog("ventas.jsonl")).filter((v) => !v.prueba || config.facturacionSimulada);
     const filas = filasReporte(ventas, { desde: inicioDiaAR(desde), hasta: inicioDiaAR(hasta, 1) });
     const ahora = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 16).replace(/[T:]/g, "-");
     const rango = [desde, hasta].filter((f) => inicioDiaAR(f));
@@ -405,10 +408,10 @@ app.post("/api/reporte", async (req, res) => {
   }
 });
 
-app.post("/api/facturas/:id/retomar", (req, res) => {
+app.post("/api/facturas/:id/retomar", async (req, res) => {
   if (sale.fase !== "idle") return res.status(409).json({ error: "Terminá la venta actual antes de retomar una cobranza." });
-  const v = readLog("ventas.jsonl").find(v => String(v.idComprobante) === req.params.id && comprobanteEmitido(v.factura) && (!v.prueba || config.facturacionSimulada));
-  const registro = readLog("cobranzas.jsonl").filter(c => String(c.idComprobante) === req.params.id).at(-1);
+  const v = (await readLog("ventas.jsonl")).find(v => String(v.idComprobante) === req.params.id && comprobanteEmitido(v.factura) && (!v.prueba || config.facturacionSimulada));
+  const registro = (await readLog("cobranzas.jsonl")).filter(c => String(c.idComprobante) === req.params.id).at(-1);
   const cobranza = registro || v?.cobranza;
   if (!v || cobranza?.modalidad !== "manual" || cobranza.estado !== "pendiente") return res.status(409).json({ error: "La factura no tiene una cobranza manual pendiente disponible." });
   sale.factura = { ...v.factura, cobranza };
@@ -417,7 +420,7 @@ app.post("/api/facturas/:id/retomar", (req, res) => {
   sale.metodoPago = v.metodoPago;
   sale.cliente = v.cliente;
   sale.fase = "cobranza";
-  guardarFacturaEnCobranza();
+  await guardarFacturaEnCobranza();
   broadcast();
   res.json({ ok: true });
 });
@@ -430,7 +433,7 @@ if (fs.existsSync(dist)) {
 }
 
 server.listen(config.port, () => {
-  console.log(`Mostrador PC MIDI en http://localhost:${config.port}  (catálogo: ${config.mode === "real" ? "Contabilium" : "de prueba"} · facturas: ${config.facturacionSimulada ? "SIMULADAS" : "REALES"})`);
+  console.log(`Mostrador PC MIDI en http://localhost:${config.port}  (catálogo: ${config.mode === "real" ? "Contabilium" : "de prueba"} · facturas: ${config.facturacionSimulada ? "SIMULADAS" : "REALES"} · datos: ${almacenamiento})`);
   console.log(`  Vendedor: http://localhost:${config.port}/vendedor`);
   console.log(`  Cliente:  http://localhost:${config.port}/cliente`);
   console.log(`  Ajustes:  http://localhost:${config.port}/admin`);

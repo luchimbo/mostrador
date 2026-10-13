@@ -10,11 +10,13 @@
     "start": "node server/index.js",
     "test": "node --test server/*.test.js",
     "probar-contabilium": "node scripts/probar-contabilium.js",
-    "probar-borrador": "node scripts/probar-borrador.js"
+    "probar-borrador": "node scripts/probar-borrador.js",
+    "importar-datos": "node scripts/importar-datos.js"
   },
   "dependencies": {
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
+    "pg": "^8.23.1",
     "qrcode": "^1.5.4",
     "socket.io": "^4.8.4"
   },

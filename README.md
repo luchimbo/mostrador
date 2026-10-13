@@ -46,6 +46,25 @@ Pasos:
 
 **Datos que no viajan con GitHub.** La carpeta `data/` (reglas de recomendación, ajustes, destinos de cobranza, facturas emitidas y registro de ventas) queda solo en cada computadora. En una instalación nueva se arranca con las reglas de ejemplo. Para llevarte la configuración de la compu actual, copiá la carpeta `data/real/` (o `data/mock/`) a la misma ubicación en la nueva, con el servidor cerrado.
 
+## Base de datos (PostgreSQL)
+
+Sin configurar nada, los datos se guardan en archivos dentro de `data/`. Si el `.env` tiene `DATABASE_URL`, todo se guarda en esa base PostgreSQL y la carpeta `data/` deja de usarse. Así corre en Railway, donde la variable es obligatoria porque el disco se borra en cada despliegue. Al arrancar, el servidor avisa cuál usa (`datos: PostgreSQL` o `datos: archivos`) y crea las tablas si faltan.
+
+- `documentos`: un valor por nombre (`ajustes`, `reglas`, `destacados`, `destinos-cobranza`, `factura-en-cobranza` y las copias `catalogo` y `tiendanube`).
+- `ventas`, `cobranzas` y `facturas_pendientes`: una fila por registro, con el detalle completo en la columna `datos`.
+
+Todas las tablas tienen la columna `modo` (`real` o `mock`), así los datos de prueba no se mezclan con los reales.
+
+Para pasar a la base lo que hay en los archivos de esta computadora, con el servidor cerrado y `DATABASE_URL` cargada en el `.env`:
+
+```bash
+npm run importar-datos
+```
+
+Copia los datos del modo configurado en `CONTABILIUM_MODE`. Se puede repetir: las ventas y cobranzas ya copiadas no se duplican, pero las reglas, los ajustes, los destacados y los destinos de cobranza reemplazan a los de la base.
+
+Los documentos se leen al arrancar. Si cambiás uno a mano en la base (por ejemplo `destinos-cobranza`, que no tiene pantalla), reiniciá el servidor para que lo tome.
+
 **Actualizar a la última versión** en una computadora ya instalada:
 
 ```bash
@@ -161,4 +180,5 @@ Estructura:
 - `server/tiendanube.js`: precios, categorías y fotos desde la tienda online
 - `server/mock.js`: catálogo (productos reales de la tienda) y Contabilium simulados para el modo prueba
 - `src/`: pantallas (React)
-- `data/<modo>/`: catálogo en caché, reglas, ajustes y registro de ventas
+- `server/store.js` y `server/postgres.js`: guardado de datos, en archivos o en PostgreSQL
+- `data/<modo>/`: catálogo en caché, reglas, ajustes y registro de ventas (cuando no hay `DATABASE_URL`)

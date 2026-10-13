@@ -2,7 +2,7 @@
 // Recorre el sitemap público y lee los datos estructurados (JSON-LD) de cada página de producto.
 // El catálogo del mostrador = productos de Contabilium cuyo código (SKU) está publicado en la tienda.
 import { config } from "./config.js";
-import { readJson, writeJson } from "./store.js";
+import { guardarCopia, readJson } from "./store.js";
 
 const ARCHIVO = "tiendanube.json";
 const UA = "Mozilla/5.0 (MostradorPCMIDI)";
@@ -139,7 +139,7 @@ export async function sincronizarTienda() {
   if (fallidas > urls.length / 2) throw new Error(`No se pudieron leer ${fallidas} de ${urls.length} páginas de la tienda.`);
 
   indice = { porSku, porNombre, actualizado: new Date().toISOString(), paginas: urls.length };
-  writeJson(ARCHIVO, indice);
+  guardarCopia(ARCHIVO, indice);
   console.log(`[tiendanube] ${urls.length} páginas · ${Object.keys(porSku).length} SKUs`);
   return estadoTienda();
 }
@@ -179,7 +179,7 @@ export async function actualizarPreciosTienda() {
     Object.assign(actual, { precio: p.precio, precioLista: p.precioLista });
   }
   indice = { ...indice, preciosActualizados: new Date().toISOString() };
-  writeJson(ARCHIVO, indice);
+  guardarCopia(ARCHIVO, indice);
   console.log(`[tiendanube] precios del listado: ${Object.keys(nuevos).length} productos, ${cambiados} cambiaron`);
   return { leidos: Object.keys(nuevos).length, cambiados };
 }
