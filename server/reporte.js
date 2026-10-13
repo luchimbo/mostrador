@@ -37,11 +37,14 @@ export function filasReporte(ventas, rango) {
 const diaAR = (iso) => new Date(new Date(iso).getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 // Estadísticas del período para la pestaña Informes. Los importes son lo cobrado.
-export function estadisticas(ventas, { desde, hasta, reglas = [] } = {}) {
+export function estadisticas(ventas, { desde, hasta, reglas = [], nombreProducto = () => null } = {}) {
   const lista = enRango(ventas, { desde, hasta });
   const dias = new Map();
   const medios = new Map();
   const productos = new Map();
+  // Cross-selling por producto sugerido: cuántas veces se ofreció y cuántas se llevó.
+  const cruzados = new Map();
+  const cruzado = (id) => cruzados.get(String(id)) || cruzados.set(String(id), { nombre: null, mostradas: 0, aceptadas: 0, unidades: 0, total: 0 }).get(String(id));
   const porRegla = new Map(reglas.map((r) => [r.id, { id: r.id, nombre: r.nombre, mostradas: 0, aceptadas: 0, ingresos: 0 }]));
   const regla = (id) => porRegla.get(id) || porRegla.set(id, { id, nombre: "Regla eliminada", mostradas: 0, aceptadas: 0, ingresos: 0 }).get(id);
   const sumar = (mapa, clave, total, extra = {}) => {
@@ -59,7 +62,11 @@ export function estadisticas(ventas, { desde, hasta, reglas = [] } = {}) {
     sumar(medios, v.transferencia ? "transferencia" : v.metodoPago || "otros", v.total);
     if (v.sugerenciasMostradas?.length) conSugerencia++;
     if (lineas.some((l) => l.reglaId)) conAgregado++;
-    for (const clave of v.sugerenciasMostradas || []) regla(clave.split(":")[0]).mostradas++;
+    for (const clave of v.sugerenciasMostradas || []) {
+      const [reglaId, productId] = clave.split(":");
+      regla(reglaId).mostradas++;
+      if (productId) cruzado(productId).mostradas++;
+    }
     for (const l of lineas) {
       const cobrado = l.total * proporcion;
       const p = productos.get(String(l.productId)) || productos.set(String(l.productId), { nombre: l.nombre, unidades: 0, total: 0 }).get(String(l.productId));
@@ -69,6 +76,11 @@ export function estadisticas(ventas, { desde, hasta, reglas = [] } = {}) {
         agregados += cobrado;
         regla(l.reglaId).aceptadas++;
         regla(l.reglaId).ingresos += cobrado;
+        const c = cruzado(l.productId);
+        c.nombre = l.nombre;
+        c.aceptadas++;
+        c.unidades += l.cantidad;
+        c.total += cobrado;
       }
     }
   }
@@ -94,6 +106,7 @@ export function estadisticas(ventas, { desde, hasta, reglas = [] } = {}) {
     porDia,
     porMedio: [...medios].map(([medio, m]) => redondear({ medio, ...m })).sort((a, b) => b.total - a.total),
     productos: [...productos.values()].map(redondear).sort((a, b) => b.total - a.total).slice(0, 15),
+    cruzados: [...cruzados].map(([id, c]) => redondear({ ...c, nombre: c.nombre || nombreProducto(id) || `Producto #${id}` })).sort((a, b) => b.total - a.total || b.mostradas - a.mostradas),
     porRegla: [...porRegla.values()].map((r) => ({ ...r, ingresos: round2(r.ingresos) })).sort((a, b) => b.ingresos - a.ingresos || b.mostradas - a.mostradas),
   };
 }

@@ -149,7 +149,16 @@ function Informes() {
       </div>
 
       <div className="informes-panel">
-        <h3>Recomendaciones</h3>
+        <h3>Cross-selling por producto</h3>
+        <p className="metrica">Productos ofrecidos como recomendación: en cuántas ventas se ofreció cada uno, en cuántas se llevó y cuánto se vendió así.</p>
+        {!datos.cruzados.length ? <p className="metrica">No se ofrecieron recomendaciones en este período.</p> : <table>
+          <thead><tr><th>Producto agregado</th><th className="num">Ofrecido</th><th className="num">Llevado</th><th className="num">Aceptación</th><th className="num">Unidades</th><th className="num">Vendido</th></tr></thead>
+          <tbody>{datos.cruzados.map((c, i) => <tr key={i}><td>{c.nombre}</td><td className="num">{c.mostradas}</td><td className="num">{c.aceptadas}</td><td className="num">{pct(c.aceptadas, c.mostradas)}</td><td className="num">{c.unidades}</td><td className="num">{pesos(c.total)}</td></tr>)}</tbody>
+        </table>}
+      </div>
+
+      <div className="informes-panel">
+        <h3>Recomendaciones por regla</h3>
         {!datos.porRegla.length ? <p className="metrica">Todavía no hay reglas de recomendación.</p> : <table>
           <thead><tr><th>Regla</th><th className="num">Mostrada</th><th className="num">Aceptada</th><th className="num">Aceptación</th><th className="num">Vendido</th></tr></thead>
           <tbody>{datos.porRegla.map((r) => <tr key={r.id}><td>{r.nombre}</td><td className="num">{r.mostradas}</td><td className="num">{r.aceptadas}</td><td className="num">{pct(r.aceptadas, r.mostradas)}</td><td className="num">{pesos(r.ingresos)}</td></tr>)}</tbody>

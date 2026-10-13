@@ -28,7 +28,7 @@ test("Informe: filtra por fecha", () => {
 
 test("Estadísticas: resumen, días, medios, productos y recomendaciones", () => {
   const otra = { ...venta, fecha: "2026-10-11T01:00:00.000Z", total: 250000, metodoPago: "mercadopago", lineas: venta.lineas.slice(0, 1), sugerenciasMostradas: ["r1:2", "r9:5"] };
-  const e = estadisticas([{ ...venta, metodoPago: "efectivo", sugerenciasMostradas: ["r1:2"] }, otra], { reglas: [{ id: "r1", nombre: "Pedales" }] });
+  const e = estadisticas([{ ...venta, metodoPago: "efectivo", sugerenciasMostradas: ["r1:2"] }, otra], { reglas: [{ id: "r1", nombre: "Pedales" }], nombreProducto: (id) => (id === "5" ? "Funda" : null) });
   assert.equal(e.ventas, 2);
   assert.equal(e.facturado, 535000);
   assert.equal(e.ticketPromedio, 267500);
@@ -38,6 +38,8 @@ test("Estadísticas: resumen, días, medios, productos y recomendaciones", () =>
   assert.deepEqual(e.porDia, [{ dia: "2026-10-08", ventas: 1, total: 285000 }, { dia: "2026-10-09", ventas: 0, total: 0 }, { dia: "2026-10-10", ventas: 1, total: 250000 }]);
   assert.deepEqual(e.porMedio.map((m) => [m.medio, m.total]), [["efectivo", 285000], ["mercadopago", 250000]]);
   assert.deepEqual(e.productos, [{ nombre: "Teclado", unidades: 2, total: 487500 }, { nombre: "Pedal", unidades: 2, total: 47500 }]);
+  // El pedal se ofreció en las dos ventas y se llevó en una; el producto 5 solo se ofreció.
+  assert.deepEqual(e.cruzados, [{ nombre: "Pedal", mostradas: 2, aceptadas: 1, unidades: 2, total: 47500 }, { nombre: "Funda", mostradas: 1, aceptadas: 0, unidades: 0, total: 0 }]);
   assert.deepEqual(e.porRegla, [{ id: "r1", nombre: "Pedales", mostradas: 2, aceptadas: 1, ingresos: 47500 }, { id: "r9", nombre: "Regla eliminada", mostradas: 1, aceptadas: 0, ingresos: 0 }]);
   assert.equal(estadisticas([venta], { desde: "2026-10-09T03:00:00.000Z" }).ventas, 0);
 });
