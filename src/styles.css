@@ -132,6 +132,15 @@ s { color: var(--gris); margin-right: 6px; font-weight: 400; }
 .supervision-lineas .detalle { color: var(--gris); font-size: 0.9em; }
 .supervision-comprobante { border-top: 1px solid var(--borde); margin-top: 24px; padding-top: 8px; overflow-wrap: anywhere; }
 .supervision-nota { margin-top: 24px; font-size: 0.85em; }
+.mensajes-ocultos { margin-top: 24px; border-color: var(--acento); max-width: 640px; }
+.mensajes-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.mensajes-cabecera h2 { margin: 0; }
+.mensajes-ocultos form { display: grid; gap: 10px; }
+.mensajes-ocultos textarea { resize: vertical; width: 100%; font: inherit; padding: 12px; border: 1px solid var(--borde); border-radius: 8px; }
+.mensaje-vendedor { position: fixed; z-index: 100; top: 20px; left: 20px; width: min(380px, calc(100vw - 40px)); display: flex; align-items: flex-start; gap: 16px; padding: 20px; background: #fff1e8; border: 1px solid var(--acento); border-left: 5px solid var(--acento); border-radius: 12px; box-shadow: 0 12px 40px #0002; }
+.mensaje-vendedor > div { flex: 1; min-width: 0; }
+.mensaje-vendedor p { margin: 10px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; max-height: 35vh; overflow-y: auto; }
+.mensaje-vendedor button { background: transparent; border: 0; padding: 0 6px; font-size: 24px; }
 @media (max-width: 700px) {
   .supervision { padding: 16px; }
   .supervision-cabecera { align-items: flex-start; flex-wrap: wrap; }

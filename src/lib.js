@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 
 // main.jsx lo conecta una vez que hay sesión iniciada.
-export const socket = io({ autoConnect: false, auth: { soloLectura: window.location.pathname === "/supervision" } });
+export const socket = io({ autoConnect: false, auth: {
+  soloLectura: window.location.pathname === "/supervision",
+  pantalla: window.location.pathname === "/vendedor" ? "vendedor" : undefined,
+} });
 // Si la sesión venció, al recargar aparece la pantalla de ingreso.
 socket.on("connect_error", (err) => err.message === "sin-sesion" && window.location.reload());
 

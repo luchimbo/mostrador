@@ -9,6 +9,7 @@ import * as contabilium from "./contabilium.js";
 import { facturar } from "./invoice.js";
 import * as mock from "./mock.js";
 import { Sale } from "./sale.js";
+import { registrarMensajes } from "./mensajes.js";
 import { claveCorrecta, COOKIE, crearLimite, crearSesion, DURACION_MS, leerCookie, sesionValida } from "./sesion.js";
 import { almacenamiento, appendLog, getSettings, guardarCopia, readJson, readLog, saveSettings, writeJson } from "./store.js";
 import { actualizarPreciosTienda, combinarConTienda, estadoTienda, sincronizarTienda, tiendaSinContabilium } from "./tiendanube.js";
@@ -284,6 +285,7 @@ const ACCIONES = {
 };
 
 io.on("connection", (socket) => {
+  registrarMensajes(io, socket);
   socket.emit("estado", estado());
   socket.on("accion", async (msg, ack = () => {}) => {
     const fn = ACCIONES[msg?.tipo];

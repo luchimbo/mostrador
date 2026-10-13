@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { accion, api, buscar, pesos, useEstado } from "./lib.js";
 import CobranzaManual from "./CobranzaManual.jsx";
+import MensajeVendedor from "./MensajeVendedor.jsx";
 
 const METODOS = [
   ["mercadopago", "MercadoPago"],
@@ -48,6 +49,7 @@ export default function Vendedor() {
 
   return (
     <div className="vendedor">
+      <MensajeVendedor />
       {!conectado && <div className="aviso error">Sin conexión con el servidor del mostrador.</div>}
       {estado.facturacionSimulada && (
         <div className="aviso prueba">

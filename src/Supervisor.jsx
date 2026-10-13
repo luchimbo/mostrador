@@ -1,4 +1,5 @@
-import { pesos, useEstado } from "./lib.js";
+import { useEffect, useState } from "react";
+import { pesos, socket, useEstado } from "./lib.js";
 import { Totales } from "./Vendedor.jsx";
 
 const FASES = {
@@ -74,6 +75,52 @@ export default function Supervisor() {
         </div>
       </>}
       <footer className="supervision-nota">Los cambios de la venta aparecen automáticamente. Las búsquedas, los clics y los campos sin enviar del vendedor no se muestran. Esta vista muestra la venta compartida, sin identificar quién la opera.</footer>
+      <MensajesOcultos conectado={conectado} />
     </main>
   );
+}
+
+function MensajesOcultos({ conectado }) {
+  const [habilitado, setHabilitado] = useState(false);
+  const [texto, setTexto] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [resultado, setResultado] = useState("");
+  useEffect(() => {
+    let secuencia = "";
+    const detectar = (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest?.("input, textarea, select, [contenteditable]")) return;
+      if (e.key.length !== 1) { secuencia = ""; return; }
+      secuencia = (secuencia + e.key.toLowerCase()).slice(-8);
+      if (secuencia === "joaquito") { setHabilitado(true); secuencia = ""; }
+    };
+    window.addEventListener("keydown", detectar);
+    return () => window.removeEventListener("keydown", detectar);
+  }, []);
+
+  async function enviar(e) {
+    e.preventDefault();
+    if (!conectado || enviando || !texto.trim()) return;
+    setEnviando(true);
+    setResultado("");
+    try {
+      const res = await socket.timeout(5000).emitWithAck("mensaje-vendedor", { codigo: "joaquito", texto });
+      setResultado(res.ok ? `Enviado a ${res.pantallas} pantalla${res.pantallas === 1 ? "" : "s"} del vendedor.` : res.error);
+      if (res.ok) setTexto("");
+    } catch {
+      setResultado("No se pudo confirmar el envío. Revisá la conexión antes de volver a intentarlo.");
+    } finally {
+      setEnviando(false);
+    }
+  }
+  if (!habilitado) return null;
+  return <section className="supervision-panel mensajes-ocultos">
+    <div className="mensajes-cabecera"><h2>Canal secreto 👀</h2><button type="button" onClick={() => { setHabilitado(false); setTexto(""); setResultado(""); }}>Ocultar</button></div>
+    <p>Aparece como un aviso en las pantallas del vendedor conectadas.</p>
+    <form onSubmit={enviar}>
+      <label htmlFor="mensaje-secreto">Mensaje para el vendedor</label>
+      <textarea id="mensaje-secreto" value={texto} onChange={(e) => setTexto(e.target.value)} maxLength={280} rows={3} required />
+      <div className="mensajes-cabecera"><small>{texto.length}/280</small><button className="primario" disabled={!conectado || enviando || !texto.trim()}>{enviando ? "Enviando…" : "Enviar mensaje"}</button></div>
+    </form>
+    {resultado && <p role="status">{resultado}</p>}
+  </section>;
 }
