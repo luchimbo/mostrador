@@ -86,6 +86,8 @@ El `npm run build` es necesario porque `iniciar-mostrador.bat` solo arma la vers
 
 ### Mensajes ocultos desde Supervisión
 
+En ese mismo canal, **Activar voz de Joaquito** habilita festejos hablados al sumar un producto o aumentar su cantidad: “¡Nueva venta de Joaquito! ¡DOOOOU!” y otras frases que se alternan. La voz suena solamente en esa pestaña de Supervisión. Requiere pulsar el botón y que el navegador tenga síntesis de voz; el botón reproduce una frase de prueba. **Silenciar**, **Ocultar** o recargar detienen la voz. No anuncia la venta que ya estaba al entrar ni los cambios recuperados al reconectar. No identifica al operador: festeja cualquier agregado en la venta compartida.
+
 En `/supervision`, hacé clic en un espacio libre y escribí **joaquito** con el teclado (sin un campo de texto seleccionado). Aparece **Canal secreto**, donde podés enviar un mensaje de hasta 280 caracteres a todas las pantallas del vendedor conectadas. El vendedor ve un aviso que puede cerrar, sin bloquear la venta; no aparece en la pantalla del cliente. El código es un easter egg dentro del acceso habitual, no una contraseña adicional. **Ocultar** cierra el panel; también se oculta al recargar. Si no hay vendedores conectados, avisa sin guardar el mensaje para después. Tras actualizar, recargá también la pantalla del vendedor para que pueda recibirlos.
 
 ### Pantalla en reposo y opiniones

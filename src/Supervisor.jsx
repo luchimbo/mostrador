@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { pesos, socket, useEstado } from "./lib.js";
 import { Totales } from "./Vendedor.jsx";
+import VozJoaquito from "./VozJoaquito.jsx";
 
 const FASES = {
   idle: "Esperando una venta",
@@ -75,12 +76,12 @@ export default function Supervisor() {
         </div>
       </>}
       <footer className="supervision-nota">Los cambios de la venta aparecen automáticamente. Las búsquedas, los clics y los campos sin enviar del vendedor no se muestran. Esta vista muestra la venta compartida, sin identificar quién la opera.</footer>
-      <MensajesOcultos conectado={conectado} />
+      <MensajesOcultos conectado={conectado} estado={estado} />
     </main>
   );
 }
 
-function MensajesOcultos({ conectado }) {
+function MensajesOcultos({ conectado, estado }) {
   const [habilitado, setHabilitado] = useState(false);
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
@@ -115,6 +116,7 @@ function MensajesOcultos({ conectado }) {
   if (!habilitado) return null;
   return <section className="supervision-panel mensajes-ocultos">
     <div className="mensajes-cabecera"><h2>Canal secreto 👀</h2><button type="button" onClick={() => { setHabilitado(false); setTexto(""); setResultado(""); }}>Ocultar</button></div>
+    <VozJoaquito estado={estado} />
     <p>Aparece como un aviso en las pantallas del vendedor conectadas.</p>
     <form onSubmit={enviar}>
       <label htmlFor="mensaje-secreto">Mensaje para el vendedor</label>
