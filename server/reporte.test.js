@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import ExcelJS from "exceljs";
-import { filasReporte, generarReporteExcel } from "./reporte.js";
+import { estadisticas, filasReporte, generarReporteExcel } from "./reporte.js";
 
 const venta = {
   fecha: "2026-10-08T18:43:25.882Z", numero: "0007-00180436", tipo: "Factura B", total: 285000, prueba: false,
@@ -24,6 +24,22 @@ test("Informe: separa producto principal y agregados, con el precio cobrado", ()
 test("Informe: filtra por fecha", () => {
   assert.equal(filasReporte([venta], { desde: "2026-10-09T03:00:00.000Z" }).length, 0);
   assert.equal(filasReporte([venta], { desde: "2026-10-08T03:00:00.000Z", hasta: "2026-10-09T03:00:00.000Z" }).length, 1);
+});
+
+test("Estadísticas: resumen, días, medios, productos y recomendaciones", () => {
+  const otra = { ...venta, fecha: "2026-10-11T01:00:00.000Z", total: 250000, metodoPago: "mercadopago", lineas: venta.lineas.slice(0, 1), sugerenciasMostradas: ["r1:2", "r9:5"] };
+  const e = estadisticas([{ ...venta, metodoPago: "efectivo", sugerenciasMostradas: ["r1:2"] }, otra], { reglas: [{ id: "r1", nombre: "Pedales" }] });
+  assert.equal(e.ventas, 2);
+  assert.equal(e.facturado, 535000);
+  assert.equal(e.ticketPromedio, 267500);
+  assert.equal(e.agregados, 47500);
+  assert.deepEqual([e.conSugerencia, e.conAgregado], [2, 1]);
+  // 01:00 UTC del 11 es todavía el 10 en Argentina; el 9 no tuvo ventas.
+  assert.deepEqual(e.porDia, [{ dia: "2026-10-08", ventas: 1, total: 285000 }, { dia: "2026-10-09", ventas: 0, total: 0 }, { dia: "2026-10-10", ventas: 1, total: 250000 }]);
+  assert.deepEqual(e.porMedio.map((m) => [m.medio, m.total]), [["efectivo", 285000], ["mercadopago", 250000]]);
+  assert.deepEqual(e.productos, [{ nombre: "Teclado", unidades: 2, total: 487500 }, { nombre: "Pedal", unidades: 2, total: 47500 }]);
+  assert.deepEqual(e.porRegla, [{ id: "r1", nombre: "Pedales", mostradas: 2, aceptadas: 1, ingresos: 47500 }, { id: "r9", nombre: "Regla eliminada", mostradas: 1, aceptadas: 0, ingresos: 0 }]);
+  assert.equal(estadisticas([venta], { desde: "2026-10-09T03:00:00.000Z" }).ventas, 0);
 });
 
 test("Informe: genera un Excel con encabezados y totales", async () => {

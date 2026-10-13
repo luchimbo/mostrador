@@ -196,6 +196,27 @@ s { color: var(--gris); margin-right: 6px; font-weight: 400; }
 .selector li button { width: 100%; text-align: left; border: none; }
 .selector li button:hover { background: var(--fondo); }
 .metrica { margin: 0; color: var(--gris); font-size: 0.85em; }
+.informes-filtros { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+.informes-filtros label { display: flex; gap: 8px; align-items: center; }
+.informes-resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.informes-resumen div, .informes-panel { background: #fff; border: 1px solid var(--borde); border-radius: 12px; padding: 14px; }
+.informes-resumen div { display: flex; flex-direction: column; gap: 4px; }
+.informes-resumen span, .informes-resumen small { color: var(--gris); font-size: 0.85em; }
+.informes-resumen b { font-size: 1.5em; }
+.informes-panel { margin-bottom: 12px; overflow-x: auto; }
+.informes-panel h3 { margin: 0 0 8px; font-size: 1em; }
+.informes-panel table { width: 100%; border-collapse: collapse; text-align: left; }
+.informes-panel th { color: var(--gris); font-size: 0.85em; font-weight: 600; }
+.informes-panel th, .informes-panel td { padding: 8px; border-bottom: 1px solid var(--borde); }
+.informes-panel tr:last-child td { border-bottom: 0; }
+.informes-panel .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.barra-celda { width: 25%; }
+.barra-celda i { display: block; height: 10px; min-width: 2px; background: var(--acento); border-radius: 0 4px 4px 0; }
+.barras-dias { display: flex; align-items: stretch; gap: 2px; height: 160px; margin-top: 10px; border-bottom: 1px solid var(--borde); }
+.barra-dia { flex: 1; min-width: 4px; max-width: 48px; display: flex; align-items: flex-end; }
+.barra-dia i { width: 100%; background: var(--acento); border-radius: 4px 4px 0 0; }
+.barra-dia:hover { background: var(--fondo); }
+.barras-eje { display: flex; justify-content: space-between; color: var(--gris); font-size: 0.8em; margin-top: 4px; }
 .ajustes { display: flex; flex-direction: column; gap: 12px; max-width: 520px; }
 .ajustes label { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .ajustes input { width: 100px; }

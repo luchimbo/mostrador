@@ -15,7 +15,7 @@ import { actualizarPreciosTienda, combinarConTienda, estadoTienda, sincronizarTi
 import { productosEnReposo } from "../shared/display.js";
 import { incluirProductosPrueba } from "./catalog.js";
 import { comprobanteEmitido, registrarCobranza } from "./cobranza.js";
-import { filasReporte, generarReporteExcel } from "./reporte.js";
+import { estadisticas, filasReporte, generarReporteExcel } from "./reporte.js";
 
 const backend = config.mode === "real" ? contabilium : mock;
 const facturador = config.facturacionSimulada ? mock : contabilium;
@@ -418,6 +418,12 @@ const inicioDiaAR = (fecha, dias = 0) => {
   d.setUTCDate(d.getUTCDate() + dias);
   return d.toISOString();
 };
+
+app.get("/api/estadisticas", async (req, res) => {
+  const { desde, hasta } = req.query;
+  const ventas = (await readLog("ventas.jsonl")).filter((v) => !v.prueba || config.facturacionSimulada);
+  res.json(estadisticas(ventas, { desde: inicioDiaAR(desde), hasta: inicioDiaAR(hasta, 1), reglas }));
+});
 
 // El informe se guarda en la carpeta "informes" del mostrador (no se sube a GitHub).
 app.post("/api/reporte", async (req, res) => {

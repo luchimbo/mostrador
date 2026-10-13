@@ -25,6 +25,7 @@ export default function Admin() {
             ["tienda", "Tienda online"],
             ["ajustes", "Descuentos y topes"],
             ["facturas", "Facturas emitidas"],
+            ["informes", "Informes"],
           ].map(([id, nombre]) => (
             <button key={id} className={tab === id ? "activo" : ""} onClick={() => setTab(id)}>
               {nombre}
@@ -37,6 +38,7 @@ export default function Admin() {
       {tab === "tienda" && <Tienda productos={productos} onActualizado={cargarCatalogo} />}
       {tab === "ajustes" && <Ajustes />}
       {tab === "facturas" && <FacturasEmitidas />}
+      {tab === "informes" && <Informes />}
     </div>
   );
 }
@@ -49,12 +51,11 @@ function FacturasEmitidas() {
     api("/facturas").then(setFacturas).catch((err) => setError(err.message));
   }
   useEffect(() => { cargar(); }, []);
-  const medios = { mercadopago: "MercadoPago", efectivo: "Efectivo", otros: "Otros", transferencia: "Transferencia", debito: "Débito", credito: "Crédito" };
+  const medios = MEDIOS;
   return <section>
     <h2>Facturas emitidas</h2>
     <p>MercadoPago registra la cobranza automáticamente. Efectivo y Otros requieren cobranza manual. Este historial no verifica cobros cargados posteriormente en Contabilium.</p>
     <button onClick={cargar}>Actualizar</button>
-    <InformeExcel />
     {error && <p className="aviso error">{error}</p>}
     {!facturas ? <p>Cargando facturas…</p> : !facturas.length ? <p>Todavía no hay facturas registradas.</p> :
       <div className="historial-facturas"><table>
@@ -75,9 +76,91 @@ function FacturasEmitidas() {
   </section>;
 }
 
-function InformeExcel() {
-  const [desde, setDesde] = useState("");
-  const [hasta, setHasta] = useState("");
+const MEDIOS = { mercadopago: "MercadoPago", efectivo: "Efectivo", otros: "Otros", transferencia: "Transferencia", debito: "Débito", credito: "Crédito" };
+const pct = (parte, total) => (total ? `${Math.round((parte / total) * 100)}%` : "—");
+// Día de hoy en Argentina (UTC-3), corrido la cantidad de días indicada.
+const diaAR = (dias = 0) => new Date(Date.now() - 3 * 60 * 60 * 1000 + dias * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const fechaCorta = (dia) => dia.split("-").reverse().slice(0, 2).join("/");
+const PERIODOS = [
+  ["Hoy", () => [diaAR(), diaAR()]],
+  ["Últimos 7 días", () => [diaAR(-6), diaAR()]],
+  ["Este mes", () => [`${diaAR().slice(0, 7)}-01`, diaAR()]],
+  ["Todo", () => ["", ""]],
+];
+
+function Informes() {
+  const [[desde, hasta], setRango] = useState(PERIODOS[2][1]);
+  const [datos, setDatos] = useState(null);
+  const [error, setError] = useState(null);
+  const [dia, setDia] = useState(null);
+  useEffect(() => {
+    setError(null);
+    setDia(null);
+    api(`/estadisticas?${new URLSearchParams({ desde, hasta })}`).then(setDatos).catch((err) => setError(err.message));
+  }, [desde, hasta]);
+  const maxDia = Math.max(1, ...(datos?.porDia || []).map((d) => d.total));
+  const maxProducto = Math.max(1, ...(datos?.productos || []).map((p) => p.total));
+
+  return <section className="informes">
+    <div className="informes-filtros">
+      {PERIODOS.map(([nombre, rango]) => {
+        const [d, h] = rango();
+        return <button key={nombre} className={d === desde && h === hasta ? "activo" : ""} onClick={() => setRango([d, h])}>{nombre}</button>;
+      })}
+      <label>Desde <input type="date" value={desde} onChange={(e) => setRango([e.target.value, hasta])} /></label>
+      <label>Hasta <input type="date" value={hasta} onChange={(e) => setRango([desde, e.target.value])} /></label>
+    </div>
+    {error && <p className="aviso error">{error}</p>}
+    {!datos ? <p>Cargando…</p> : !datos.ventas ? <p className="vacio">No hay ventas en este período.</p> : <>
+      <div className="informes-resumen">
+        <div><span>Facturado</span><b>{pesos(datos.facturado)}</b></div>
+        <div><span>Ventas</span><b>{datos.ventas}</b></div>
+        <div><span>Ticket promedio</span><b>{pesos(datos.ticketPromedio)}</b></div>
+        <div><span>Vendido por recomendaciones</span><b>{pesos(datos.agregados)}</b><small>{pct(datos.agregados, datos.facturado)} de lo facturado</small></div>
+        <div><span>Ventas con un agregado</span><b>{datos.conAgregado}</b><small>{pct(datos.conAgregado, datos.conSugerencia)} de las ventas con sugerencia ({datos.conSugerencia})</small></div>
+      </div>
+
+      <div className="informes-panel">
+        <h3>Facturado por día</h3>
+        <p className="metrica">{dia ? `${fechaCorta(dia.dia)}: ${pesos(dia.total)} en ${dia.ventas} ${dia.ventas === 1 ? "venta" : "ventas"}` : `Pasá el mouse por una barra para ver el detalle. Día más alto: ${pesos(maxDia)}.`}</p>
+        <div className="barras-dias" onMouseLeave={() => setDia(null)}>
+          {datos.porDia.map((d) => <div key={d.dia} className="barra-dia" title={`${fechaCorta(d.dia)}: ${pesos(d.total)} (${d.ventas})`} onMouseEnter={() => setDia(d)}>
+            <i style={{ height: `${(d.total / maxDia) * 100}%` }} />
+          </div>)}
+        </div>
+        <div className="barras-eje"><span>{fechaCorta(datos.porDia[0].dia)}</span>{datos.porDia.length > 1 && <span>{fechaCorta(datos.porDia.at(-1).dia)}</span>}</div>
+      </div>
+
+      <div className="informes-panel">
+        <h3>Por medio de pago</h3>
+        <table>
+          <thead><tr><th>Medio</th><th className="num">Ventas</th><th className="num">Facturado</th><th className="num">Parte</th></tr></thead>
+          <tbody>{datos.porMedio.map((m) => <tr key={m.medio}><td>{MEDIOS[m.medio] || m.medio}</td><td className="num">{m.ventas}</td><td className="num">{pesos(m.total)}</td><td className="num">{pct(m.total, datos.facturado)}</td></tr>)}</tbody>
+        </table>
+      </div>
+
+      <div className="informes-panel">
+        <h3>Productos más vendidos</h3>
+        <table>
+          <thead><tr><th>Producto</th><th className="num">Unidades</th><th className="num">Facturado</th><th /></tr></thead>
+          <tbody>{datos.productos.map((p) => <tr key={p.nombre}><td>{p.nombre}</td><td className="num">{p.unidades}</td><td className="num">{pesos(p.total)}</td>
+            <td className="barra-celda"><i style={{ width: `${(p.total / maxProducto) * 100}%` }} /></td></tr>)}</tbody>
+        </table>
+      </div>
+
+      <div className="informes-panel">
+        <h3>Recomendaciones</h3>
+        {!datos.porRegla.length ? <p className="metrica">Todavía no hay reglas de recomendación.</p> : <table>
+          <thead><tr><th>Regla</th><th className="num">Mostrada</th><th className="num">Aceptada</th><th className="num">Aceptación</th><th className="num">Vendido</th></tr></thead>
+          <tbody>{datos.porRegla.map((r) => <tr key={r.id}><td>{r.nombre}</td><td className="num">{r.mostradas}</td><td className="num">{r.aceptadas}</td><td className="num">{pct(r.aceptadas, r.mostradas)}</td><td className="num">{pesos(r.ingresos)}</td></tr>)}</tbody>
+        </table>}
+      </div>
+    </>}
+    <InformeExcel desde={desde} hasta={hasta} />
+  </section>;
+}
+
+function InformeExcel({ desde, hasta }) {
   const [estado, setEstado] = useState(null);
   async function guardar() {
     setEstado({ guardando: true });
@@ -86,9 +169,7 @@ function InformeExcel() {
   }
   return <div className="informe-excel">
     <h3>Informe de ventas en Excel</h3>
-    <p>Fecha, comprobante, producto principal, productos agregados por recomendación, precio total y precio de los agregados. Sin fechas incluye todas las ventas. Se guarda en la carpeta <b>informes</b> del mostrador.</p>
-    <label>Desde <input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} /></label>
-    <label>Hasta <input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} /></label>
+    <p>Una fila por venta del período elegido arriba: fecha, comprobante, producto principal, productos agregados por recomendación, precio total y precio de los agregados. Se guarda en la carpeta <b>informes</b> del mostrador.</p>
     <button className="primario" disabled={estado?.guardando} onClick={guardar}>{estado?.guardando ? "Guardando…" : "Guardar Excel"}</button>
     {estado?.archivo && <p className="aviso ok">Informe guardado ({estado.ventas} ventas): <code>{estado.archivo}</code></p>}
     {estado?.error && <p className="aviso error">{estado.error}</p>}
