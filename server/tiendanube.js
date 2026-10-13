@@ -30,10 +30,18 @@ const decodificar = (s) =>
     .replace(/&amp;/g, "&")
     .trim();
 
+// La tienda frena a quien pide muchas páginas seguidas, sobre todo desde un servidor: se espera y se reintenta.
+const ESPERAS_MS = [3000, 10000];
+const REINTENTABLES = [403, 429, 500, 502, 503, 504];
+
 async function texto(url) {
-  const res = await fetch(url, { headers: { "User-Agent": UA } });
-  if (!res.ok) throw new Error(`HTTP ${res.status} en ${url}`);
-  return res.text();
+  for (let intento = 0; ; intento++) {
+    const res = await fetch(url, { headers: { "User-Agent": UA } });
+    if (res.ok) return res.text();
+    if (!REINTENTABLES.includes(res.status) || intento >= ESPERAS_MS.length) throw new Error(`HTTP ${res.status} en ${url}`);
+    const pedida = Number(res.headers.get("retry-after")) * 1000;
+    await new Promise((r) => setTimeout(r, Math.min(pedida || ESPERAS_MS[intento], 30_000)));
+  }
 }
 
 // Variantes del producto principal (atributo data-variants). Ojo: el precio del JSON-LD es el de LISTA;
@@ -138,9 +146,15 @@ export async function sincronizarTienda() {
   await Promise.all(Array.from({ length: 4 }, trabajador));
   if (fallidas > urls.length / 2) throw new Error(`No se pudieron leer ${fallidas} de ${urls.length} páginas de la tienda.`);
 
-  indice = { porSku, porNombre, actualizado: new Date().toISOString(), paginas: urls.length };
+  // Si faltó leer alguna página, se conservan los productos que ya se conocían en vez de darlos por despublicados.
+  indice = {
+    porSku: fallidas ? { ...indice.porSku, ...porSku } : porSku,
+    porNombre: fallidas ? { ...indice.porNombre, ...porNombre } : porNombre,
+    actualizado: new Date().toISOString(),
+    paginas: urls.length,
+  };
   guardarCopia(ARCHIVO, indice);
-  console.log(`[tiendanube] ${urls.length} páginas · ${Object.keys(porSku).length} SKUs`);
+  console.log(`[tiendanube] ${urls.length} páginas (${fallidas} sin leer) · ${Object.keys(indice.porSku).length} SKUs`);
   return estadoTienda();
 }
 
