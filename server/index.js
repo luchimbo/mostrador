@@ -15,7 +15,7 @@ import { actualizarPreciosTienda, combinarConTienda, estadoTienda, sincronizarTi
 import { productosEnReposo } from "../shared/display.js";
 import { incluirProductosPrueba } from "./catalog.js";
 import { comprobanteEmitido, registrarCobranza } from "./cobranza.js";
-import { estadisticas, filasReporte, generarReporteExcel } from "./reporte.js";
+import { estadisticas, filasReporte, generarReporteExcel, sinProductosPrueba } from "./reporte.js";
 
 const backend = config.mode === "real" ? contabilium : mock;
 const facturador = config.facturacionSimulada ? mock : contabilium;
@@ -421,7 +421,7 @@ const inicioDiaAR = (fecha, dias = 0) => {
 
 app.get("/api/estadisticas", async (req, res) => {
   const { desde, hasta } = req.query;
-  const ventas = (await readLog("ventas.jsonl")).filter((v) => !v.prueba || config.facturacionSimulada);
+  const ventas = sinProductosPrueba((await readLog("ventas.jsonl")).filter((v) => !v.prueba || config.facturacionSimulada), config.productosPruebaIds);
   res.json(estadisticas(ventas, { desde: inicioDiaAR(desde), hasta: inicioDiaAR(hasta, 1) }));
 });
 
@@ -429,7 +429,7 @@ app.get("/api/estadisticas", async (req, res) => {
 app.post("/api/reporte", async (req, res) => {
   try {
     const { desde, hasta } = req.body || {};
-    const ventas = (await readLog("ventas.jsonl")).filter((v) => !v.prueba || config.facturacionSimulada);
+    const ventas = sinProductosPrueba((await readLog("ventas.jsonl")).filter((v) => !v.prueba || config.facturacionSimulada), config.productosPruebaIds);
     const filas = filasReporte(ventas, { desde: inicioDiaAR(desde), hasta: inicioDiaAR(hasta, 1) });
     const ahora = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 16).replace(/[T:]/g, "-");
     const rango = [desde, hasta].filter((f) => inicioDiaAR(f));

@@ -14,6 +14,19 @@ function proporcionCobrada(v) {
   return sumaLineas ? v.total / sumaLineas : 1;
 }
 
+// Los productos de prueba (PRODUCTOS_PRUEBA_IDS) no cuentan en los informes: se quitan sus líneas
+// con lo que se cobró por ellas, y las ventas que solo tenían esos productos.
+export function sinProductosPrueba(ventas, ids = []) {
+  const prueba = new Set(ids.map(String));
+  if (!prueba.size) return ventas;
+  return ventas.flatMap((v) => {
+    const lineas = (v.lineas || []).filter((l) => !prueba.has(String(l.productId)));
+    if (lineas.length === (v.lineas || []).length) return [v];
+    if (!lineas.length) return [];
+    return [{ ...v, lineas, total: round2(lineas.reduce((a, l) => a + l.total, 0) * proporcionCobrada(v)) }];
+  });
+}
+
 export function filasReporte(ventas, rango) {
   return enRango(ventas, rango)
     .map((v) => {

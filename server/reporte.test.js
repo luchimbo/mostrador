@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import ExcelJS from "exceljs";
-import { estadisticas, filasReporte, generarReporteExcel } from "./reporte.js";
+import { estadisticas, filasReporte, generarReporteExcel, sinProductosPrueba } from "./reporte.js";
 
 const venta = {
   fecha: "2026-10-08T18:43:25.882Z", numero: "0007-00180436", tipo: "Factura B", total: 285000, prueba: false,
@@ -27,6 +27,16 @@ test("Informe: es agregado todo lo que se suma al primer producto, venga o no de
   assert.equal(fila.principal, "Teclado");
   assert.equal(fila.agregados, "2 × Pedal + Funda");
   assert.equal(fila.totalAgregados, 80000);
+});
+
+test("Informe: los productos de prueba no cuentan", () => {
+  const demo = { ...venta, lineas: [{ productId: 26604, nombre: "PRODUCTO DEMO", cantidad: 1, total: 3000, reglaId: null }], total: 3000 };
+  assert.deepEqual(sinProductosPrueba([demo, venta], ["26604"]), [venta]);
+  // Venta mixta: queda sin la línea de prueba y sin lo que se cobró por ella (5% de contado).
+  const [mixta] = sinProductosPrueba([venta], ["2"]);
+  assert.deepEqual(mixta.lineas.map((l) => l.nombre), ["Teclado"]);
+  assert.equal(mixta.total, 237500);
+  assert.deepEqual(sinProductosPrueba([demo], []), [demo]);
 });
 
 test("Informe: filtra por fecha", () => {
