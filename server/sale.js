@@ -86,7 +86,7 @@ export class Sale {
     this.sinFactura = Boolean(valor);
   }
 
-  // El vendedor puede bajar el total final (ej. redondear en efectivo). Se borra al cambiar la venta.
+  // El vendedor puede escribir el total final, menor o mayor (ej. redondear en efectivo). Se borra al cambiar la venta.
   ajustarTotal(valor, settings) {
     if (this.fase !== "venta" || !this.lines.length) throw new Error("Agregá productos antes de ajustar el total.");
     if (valor === null || valor === undefined || valor === "") { this.totalAjustado = null; return; }
@@ -94,7 +94,6 @@ export class Sale {
     const total = round2(Number(valor));
     const sinAjuste = calcularTotales(this.lines, this.metodoPago, settings, { transferencia: this.transferencia }).totalAPagar;
     if (!Number.isFinite(total) || total <= 0) throw new Error("Ingresá un total válido.");
-    if (total > sinAjuste) throw new Error("El total ajustado no puede superar el total de la venta.");
     this.totalAjustado = total === sinAjuste ? null : total;
   }
 
@@ -133,7 +132,6 @@ export class Sale {
 
   totales(settings) {
     const t = calcularTotales(this.lines, this.metodoPago, settings, { transferencia: this.transferencia });
-    if (this.totalAjustado !== null && this.totalAjustado > t.totalAPagar) this.totalAjustado = null;
     const ajustado = this.totalAjustado !== null
       ? { totalSinAjuste: t.totalAPagar, ajuste: round2(this.totalAjustado - t.totalAPagar), totalAPagar: this.totalAjustado }
       : {};

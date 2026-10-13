@@ -208,12 +208,12 @@ function Totales({ totales }) {
           <span>−{pesos(totales.descuentoContado)}</span>
         </div>
       )}
-      {totales.ajuste < 0 && (
-        <div className="descuento">
+      {totales.ajuste ? (
+        <div className={totales.ajuste < 0 ? "descuento" : undefined}>
           <span>Ajuste del vendedor</span>
-          <span>−{pesos(-totales.ajuste)}</span>
+          <span>{totales.ajuste < 0 ? "−" : "+"}{pesos(Math.abs(totales.ajuste))}</span>
         </div>
-      )}
+      ) : null}
       <div className="total">
         <span>Total</span>
         <span>{pesos(totales.totalAPagar)}</span>
@@ -222,7 +222,7 @@ function Totales({ totales }) {
   );
 }
 
-// Total final escrito por el vendedor (ej. redondear en efectivo). Solo puede bajar el total.
+// Total final escrito por el vendedor (ej. redondear en efectivo). Puede ser menor o mayor que el de la venta.
 function AjusteTotal({ estado, bloqueado, ejecutar }) {
   const [valor, setValor] = useState("");
   const { totales } = estado;
@@ -252,7 +252,7 @@ function AjusteTotal({ estado, bloqueado, ejecutar }) {
         {redondeos.map((v) => (
           <button type="button" key={v} disabled={bloqueado} onClick={() => aplicar(v)}>{pesos(v)}</button>
         ))}
-        {totales.ajuste < 0 && <button type="button" className="secundario" disabled={bloqueado} onClick={() => aplicar(null)}>Quitar ajuste</button>}
+        {totales.ajuste ? <button type="button" className="secundario" disabled={bloqueado} onClick={() => aplicar(null)}>Quitar ajuste</button> : null}
       </div>
     </div>
   );

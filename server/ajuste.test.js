@@ -30,9 +30,8 @@ test("Total ajustado: redondea el total a pagar y se borra al cambiar la venta",
   assert.equal(sale.totalAjustado, null);
 });
 
-test("Total ajustado: no puede superar el total ni ser cero", () => {
+test("Total ajustado: no puede ser cero", () => {
   const sale = ventaEnEfectivo();
-  assert.throws(() => sale.ajustarTotal(999999999, settings), /no puede superar/);
   assert.throws(() => sale.ajustarTotal(0, settings), /válido/);
   sale.ajustarTotal(320000, settings);
   sale.ajustarTotal("", settings);
@@ -47,6 +46,20 @@ test("Total ajustado: la factura suma exactamente el total escrito", () => {
   const { Items } = armarComprobante({ lines: snap.lines, metodoPago: "efectivo", totales: snap.totales, idCliente: 1, tipoFc: "FCB", settings });
   const total = Items.reduce((a, i) => a + i.Cantidad * i.PrecioUnitario * (1 + i.Iva / 100) * (1 - i.Bonificacion / 100), 0);
   assert.ok(Math.abs(total - 320000) < 0.05, `total facturado ${total}`);
+  assert.ok(Items.every((i) => i.Bonificacion === 0));
+});
+
+test("Total ajustado: puede superar el total y la factura suma lo escrito", () => {
+  const sale = ventaEnEfectivo();
+  const sinAjuste = sale.totales(settings).totalAPagar;
+  sale.ajustarTotal(330000, settings);
+  const snap = sale.snapshot(new Map(), [], settings);
+  assert.ok(330000 > sinAjuste);
+  assert.equal(snap.totales.totalAPagar, 330000);
+  assert.equal(snap.totales.ajuste, Math.round((330000 - sinAjuste) * 100) / 100);
+  const { Items } = armarComprobante({ lines: snap.lines, metodoPago: "efectivo", totales: snap.totales, idCliente: 1, tipoFc: "FCB", settings });
+  const total = Items.reduce((a, i) => a + i.Cantidad * i.PrecioUnitario * (1 + i.Iva / 100) * (1 - i.Bonificacion / 100), 0);
+  assert.ok(Math.abs(total - 330000) < 0.05, `total facturado ${total}`);
   assert.ok(Items.every((i) => i.Bonificacion === 0));
 });
 
