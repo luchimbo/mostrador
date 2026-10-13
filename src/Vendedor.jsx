@@ -102,6 +102,7 @@ export default function Vendedor() {
               </span>
             )}
             <ActualizarPrecios />
+            <a href="/supervision" target="_blank" rel="noreferrer">Supervisión en vivo</a>
             <a href="/admin" target="_blank" rel="noreferrer">
               Ajustes
             </a>
@@ -187,7 +188,7 @@ function Sugerencias({ sugerencias, bloqueado, onAgregar }) {
   );
 }
 
-function Totales({ totales }) {
+export function Totales({ totales }) {
   return (
     <div className="totales">
       {totales.descuentoRecomendaciones > 0 && (

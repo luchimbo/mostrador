@@ -3,6 +3,7 @@
 Sistema de mostrador con **pantalla para el cliente** (estilo Clover), **recomendaciones con descuento** (cross-selling) y **facturación electrónica en Contabilium** ingresando DNI o CUIT y condición frente al IVA.
 
 - **Pantalla del vendedor** (`/vendedor`): busca y agrega productos, ve las sugerencias, elige medio de pago y factura.
+- **Supervisión en vivo** (`/supervision`): desde otra computadora, usando la misma dirección web, ve los productos, descuentos, total, condición de venta, comprobante y estado de cobranza de la venta compartida. Se actualiza automáticamente y no tiene controles para modificar la venta. Usa el mismo acceso con contraseña. No muestra búsquedas, clics ni campos locales sin enviar; tampoco identifica al vendedor. Se abre desde el inicio o el enlace **Supervisión en vivo** de la pantalla del vendedor. Si se pierde la conexión, avisa que los datos pueden estar desactualizados y los recupera al reconectar.
 - **Pantalla del cliente** (`/cliente`, segundo monitor): ve en vivo lo que se le cobra, las sugerencias con descuento y, al final, un QR para dejar una opinión en Google. Sin venta en curso, pasa ofertas, productos destacados y videos.
 - **Ajustes** (`/admin`): reglas de recomendación, productos destacados, descuentos, topes y métricas (cuántas veces se mostró y aceptó cada sugerencia).
 

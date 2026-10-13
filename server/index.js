@@ -288,6 +288,7 @@ io.on("connection", (socket) => {
   socket.on("accion", async (msg, ack = () => {}) => {
     const fn = ACCIONES[msg?.tipo];
     try {
+      if (socket.handshake.auth.soloLectura) throw new Error("La vista de supervisión es de solo lectura.");
       if (!fn) throw new Error(`Acción desconocida: ${msg?.tipo}`);
       if (["cantidad", "quitar", "metodoPago", "sinFactura", "transferencia", "ajustarTotal"].includes(msg.tipo) && ["facturando", "cobranza", "cobrando"].includes(sale.fase)) throw new Error("Terminá la factura y cobranza antes de modificar la venta.");
       const res = await fn(msg);

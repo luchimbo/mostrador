@@ -3,10 +3,11 @@ import Admin from "./Admin.jsx";
 import Cliente from "./Cliente.jsx";
 import Login from "./Login.jsx";
 import Vendedor from "./Vendedor.jsx";
+import Supervisor from "./Supervisor.jsx";
 import { socket } from "./lib.js";
 import "./styles.css";
 
-const pantallas = { "/vendedor": Vendedor, "/cliente": Cliente, "/admin": Admin };
+const pantallas = { "/vendedor": Vendedor, "/cliente": Cliente, "/admin": Admin, "/supervision": Supervisor };
 const Pantalla = pantallas[window.location.pathname] || Inicio;
 
 // Si el servidor no responde se muestra la pantalla igual: avisa sola que está sin conexión.
@@ -24,6 +25,7 @@ function Inicio() {
       <h1>Mostrador · PC MIDI Center</h1>
       <a href="/vendedor">Pantalla del vendedor</a>
       <a href="/cliente">Pantalla del cliente</a>
+      <a href="/supervision">Supervisión en vivo</a>
       <a href="/admin">Recomendaciones y ajustes</a>
       {sesion.requerida && <button type="button" className="secundario" onClick={salir}>Cerrar sesión</button>}
     </div>
