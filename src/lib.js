@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 
-export const socket = io();
+// main.jsx lo conecta una vez que hay sesión iniciada.
+export const socket = io({ autoConnect: false });
+// Si la sesión venció, al recargar aparece la pantalla de ingreso.
+socket.on("connect_error", (err) => err.message === "sin-sesion" && window.location.reload());
 
 // El servidor manda el estado apenas conecta, a veces antes de que React monte:
 // guardamos el último recibido para no perderlo.
@@ -53,6 +56,7 @@ export async function api(ruta, opciones = {}) {
     ...opciones,
     body: opciones.body ? JSON.stringify(opciones.body) : undefined,
   });
+  if (res.status === 401) window.location.reload();
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Error del servidor");
   return data;

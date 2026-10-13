@@ -32,6 +32,8 @@ export const config = {
   // Datos separados por modo: las reglas de prueba no se mezclan con las reales.
   tiendanubeUrl: env.TIENDANUBE_URL || "https://www.pcmidi.com.ar",
   dataDir: path.join(ROOT, "data", mode),
+  // Contraseña compartida para entrar al mostrador. Vacía = sin login (solo para uso en esta computadora).
+  claveAcceso: (env.CLAVE_ACCESO || "").trim(),
   // Con DATABASE_URL los datos van a PostgreSQL en vez de a la carpeta data/.
   databaseUrl: (env.DATABASE_URL || "").trim(),
   catalogRefreshMinutes: 10,

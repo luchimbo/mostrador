@@ -9,6 +9,7 @@ import * as contabilium from "./contabilium.js";
 import { facturar } from "./invoice.js";
 import * as mock from "./mock.js";
 import { Sale } from "./sale.js";
+import { claveCorrecta, COOKIE, crearLimite, crearSesion, DURACION_MS, leerCookie, sesionValida } from "./sesion.js";
 import { almacenamiento, appendLog, getSettings, guardarCopia, readJson, readLog, saveSettings, writeJson } from "./store.js";
 import { actualizarPreciosTienda, combinarConTienda, estadoTienda, sincronizarTienda, tiendaSinContabilium } from "./tiendanube.js";
 import { productosEnReposo } from "../shared/display.js";
@@ -158,6 +159,16 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+// ---------- Acceso ----------
+// En Railway el mostrador queda abierto a internet: sin contraseña cualquiera podría facturar.
+const enRailway = Boolean(process.env.RAILWAY_ENVIRONMENT);
+if (enRailway && !config.claveAcceso) throw new Error("Falta CLAVE_ACCESO: en Railway el mostrador necesita contraseña.");
+// Railway atiende detrás de un proxy: la dirección y el https reales llegan en sus cabeceras.
+if (enRailway) app.set("trust proxy", 1);
+
+const conSesion = (cookies) => !config.claveAcceso || sesionValida(config.claveAcceso, leerCookie(cookies));
+io.use((socket, next) => (conSesion(socket.handshake.headers.cookie) ? next() : next(new Error("sin-sesion"))));
+
 function broadcast() {
   io.emit("estado", estado());
 }
@@ -291,6 +302,25 @@ io.on("connection", (socket) => {
 
 // ---------- API REST para el panel de administración ----------
 app.use(express.json());
+
+const intentos = crearLimite();
+app.get("/api/sesion", (req, res) => res.json({ ok: conSesion(req.headers.cookie), requerida: Boolean(config.claveAcceso) }));
+app.post("/api/login", (req, res) => {
+  if (!config.claveAcceso) return res.json({ ok: true });
+  if (intentos.bloqueado(req.ip)) return res.status(429).json({ error: "Demasiados intentos. Esperá 15 minutos y volvé a probar." });
+  if (!claveCorrecta(config.claveAcceso, req.body?.clave)) {
+    intentos.fallo(req.ip);
+    return res.status(401).json({ error: "Contraseña incorrecta." });
+  }
+  intentos.acierto(req.ip);
+  res.cookie(COOKIE, crearSesion(config.claveAcceso), { httpOnly: true, sameSite: "lax", secure: req.secure, maxAge: DURACION_MS });
+  res.json({ ok: true });
+});
+app.post("/api/logout", (_req, res) => {
+  res.clearCookie(COOKIE);
+  res.json({ ok: true });
+});
+app.use("/api", (req, res, next) => (conSesion(req.headers.cookie) ? next() : res.status(401).json({ error: "Iniciá sesión para continuar." })));
 
 app.get("/api/catalogo", (_req, res) => res.json({ ...catalogo, productos: [...productsById.values()] }));
 app.post("/api/catalogo/actualizar", async (_req, res) => {
@@ -433,7 +463,7 @@ if (fs.existsSync(dist)) {
 }
 
 server.listen(config.port, () => {
-  console.log(`Mostrador PC MIDI en http://localhost:${config.port}  (catálogo: ${config.mode === "real" ? "Contabilium" : "de prueba"} · facturas: ${config.facturacionSimulada ? "SIMULADAS" : "REALES"} · datos: ${almacenamiento})`);
+  console.log(`Mostrador PC MIDI en http://localhost:${config.port}  (catálogo: ${config.mode === "real" ? "Contabilium" : "de prueba"} · facturas: ${config.facturacionSimulada ? "SIMULADAS" : "REALES"} · datos: ${almacenamiento} · acceso: ${config.claveAcceso ? "con contraseña" : "SIN contraseña"})`);
   console.log(`  Vendedor: http://localhost:${config.port}/vendedor`);
   console.log(`  Cliente:  http://localhost:${config.port}/cliente`);
   console.log(`  Ajustes:  http://localhost:${config.port}/admin`);

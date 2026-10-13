@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": { "node": ">=22" },
   "description": "Mostrador con pantalla para el cliente, cross-selling y facturación vía Contabilium - PC MIDI Center",
   "scripts": {
     "dev": "concurrently -k -n server,web -c blue,green \"node --watch server/index.js\" \"vite\"",

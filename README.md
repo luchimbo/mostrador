@@ -46,6 +46,12 @@ Pasos:
 
 **Datos que no viajan con GitHub.** La carpeta `data/` (reglas de recomendación, ajustes, destinos de cobranza, facturas emitidas y registro de ventas) queda solo en cada computadora. En una instalación nueva se arranca con las reglas de ejemplo. Para llevarte la configuración de la compu actual, copiá la carpeta `data/real/` (o `data/mock/`) a la misma ubicación en la nueva, con el servidor cerrado.
 
+## Acceso con contraseña
+
+Si el `.env` tiene `CLAVE_ACCESO`, todas las pantallas (`/vendedor`, `/cliente`, `/admin`) y sus datos piden esa contraseña. Es una sola, compartida por todos los vendedores. La sesión queda abierta 30 días en cada navegador; **Cerrar sesión** está en la página de inicio (`/`). Tras 8 intentos fallidos desde una misma conexión hay que esperar 15 minutos.
+
+Para cambiarla, cambiá `CLAVE_ACCESO` y reiniciá el servidor: todas las sesiones abiertas se cierran. Sin `CLAVE_ACCESO` no hay login, lo que solo es razonable en una computadora del local; en Railway es obligatoria y el servidor no arranca sin ella.
+
 ## Base de datos (PostgreSQL)
 
 Sin configurar nada, los datos se guardan en archivos dentro de `data/`. Si el `.env` tiene `DATABASE_URL`, todo se guarda en esa base PostgreSQL y la carpeta `data/` deja de usarse. Así corre en Railway, donde la variable es obligatoria porque el disco se borra en cada despliegue. Al arrancar, el servidor avisa cuál usa (`datos: PostgreSQL` o `datos: archivos`) y crea las tablas si faltan.
