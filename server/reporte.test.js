@@ -21,27 +21,40 @@ test("Informe: separa producto principal y agregados, con el precio cobrado", ()
   assert.equal(fila.totalAgregados, 47500);
 });
 
+test("Informe: es agregado todo lo que se suma al primer producto, venga o no de una recomendación", () => {
+  const lineas = [venta.lineas[0], { ...venta.lineas[1], reglaId: null }, { productId: "3", nombre: "Funda", cantidad: 1, total: 30000, reglaId: null }];
+  const [fila] = filasReporte([{ ...venta, total: 330000, lineas }]);
+  assert.equal(fila.principal, "Teclado");
+  assert.equal(fila.agregados, "2 × Pedal + Funda");
+  assert.equal(fila.totalAgregados, 80000);
+});
+
 test("Informe: filtra por fecha", () => {
   assert.equal(filasReporte([venta], { desde: "2026-10-09T03:00:00.000Z" }).length, 0);
   assert.equal(filasReporte([venta], { desde: "2026-10-08T03:00:00.000Z", hasta: "2026-10-09T03:00:00.000Z" }).length, 1);
 });
 
-test("Estadísticas: resumen, días, medios, productos y recomendaciones", () => {
-  const otra = { ...venta, fecha: "2026-10-11T01:00:00.000Z", total: 250000, metodoPago: "mercadopago", lineas: venta.lineas.slice(0, 1), sugerenciasMostradas: ["r1:2", "r9:5"] };
-  const e = estadisticas([{ ...venta, metodoPago: "efectivo", sugerenciasMostradas: ["r1:2"] }, otra], { reglas: [{ id: "r1", nombre: "Pedales" }], nombreProducto: (id) => (id === "5" ? "Funda" : null) });
+test("Estadísticas: resumen, días, medios, productos y cross-selling", () => {
+  const otra = { ...venta, fecha: "2026-10-11T01:00:00.000Z", total: 250000, metodoPago: "mercadopago", lineas: venta.lineas.slice(0, 1) };
+  const e = estadisticas([{ ...venta, metodoPago: "efectivo" }, otra]);
   assert.equal(e.ventas, 2);
   assert.equal(e.facturado, 535000);
   assert.equal(e.ticketPromedio, 267500);
   assert.equal(e.agregados, 47500);
-  assert.deepEqual([e.conSugerencia, e.conAgregado], [2, 1]);
+  assert.equal(e.conAgregado, 1);
   // 01:00 UTC del 11 es todavía el 10 en Argentina; el 9 no tuvo ventas.
   assert.deepEqual(e.porDia, [{ dia: "2026-10-08", ventas: 1, total: 285000 }, { dia: "2026-10-09", ventas: 0, total: 0 }, { dia: "2026-10-10", ventas: 1, total: 250000 }]);
   assert.deepEqual(e.porMedio.map((m) => [m.medio, m.total]), [["efectivo", 285000], ["mercadopago", 250000]]);
-  assert.deepEqual(e.productos, [{ nombre: "Teclado", unidades: 2, total: 487500 }, { nombre: "Pedal", unidades: 2, total: 47500 }]);
-  // El pedal se ofreció en las dos ventas y se llevó en una; el producto 5 solo se ofreció.
-  assert.deepEqual(e.cruzados, [{ nombre: "Pedal", mostradas: 2, aceptadas: 1, unidades: 2, total: 47500 }, { nombre: "Funda", mostradas: 1, aceptadas: 0, unidades: 0, total: 0 }]);
-  assert.deepEqual(e.porRegla, [{ id: "r1", nombre: "Pedales", mostradas: 2, aceptadas: 1, ingresos: 47500 }, { id: "r9", nombre: "Regla eliminada", mostradas: 1, aceptadas: 0, ingresos: 0 }]);
+  assert.deepEqual(e.productos, [{ nombre: "Teclado", ventas: 2, unidades: 2, total: 487500 }, { nombre: "Pedal", ventas: 1, unidades: 2, total: 47500 }]);
+  assert.deepEqual(e.cruzados, [{ nombre: "Pedal", ventas: 1, unidades: 2, total: 47500 }]);
   assert.equal(estadisticas([venta], { desde: "2026-10-09T03:00:00.000Z" }).ventas, 0);
+});
+
+test("Estadísticas: es cross-selling todo lo que se suma al primer producto, venga o no de una recomendación", () => {
+  const lineas = [venta.lineas[0], { ...venta.lineas[1], reglaId: null }, { productId: "3", nombre: "Funda", cantidad: 1, total: 30000, reglaId: null }];
+  const e = estadisticas([{ ...venta, total: 330000, lineas }]);
+  assert.equal(e.agregados, 80000);
+  assert.deepEqual(e.cruzados.map((c) => c.nombre), ["Pedal", "Funda"]);
 });
 
 test("Informe: genera un Excel con encabezados y totales", async () => {

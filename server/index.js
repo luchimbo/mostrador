@@ -422,7 +422,7 @@ const inicioDiaAR = (fecha, dias = 0) => {
 app.get("/api/estadisticas", async (req, res) => {
   const { desde, hasta } = req.query;
   const ventas = (await readLog("ventas.jsonl")).filter((v) => !v.prueba || config.facturacionSimulada);
-  res.json(estadisticas(ventas, { desde: inicioDiaAR(desde), hasta: inicioDiaAR(hasta, 1), reglas, nombreProducto: (id) => productsById.get(String(id))?.nombre }));
+  res.json(estadisticas(ventas, { desde: inicioDiaAR(desde), hasta: inicioDiaAR(hasta, 1) }));
 });
 
 // El informe se guarda en la carpeta "informes" del mostrador (no se sube a GitHub).

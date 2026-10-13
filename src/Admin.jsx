@@ -116,8 +116,8 @@ function Informes() {
         <div><span>Facturado</span><b>{pesos(datos.facturado)}</b></div>
         <div><span>Ventas</span><b>{datos.ventas}</b></div>
         <div><span>Ticket promedio</span><b>{pesos(datos.ticketPromedio)}</b></div>
-        <div><span>Vendido por recomendaciones</span><b>{pesos(datos.agregados)}</b><small>{pct(datos.agregados, datos.facturado)} de lo facturado</small></div>
-        <div><span>Ventas con un agregado</span><b>{datos.conAgregado}</b><small>{pct(datos.conAgregado, datos.conSugerencia)} de las ventas con sugerencia ({datos.conSugerencia})</small></div>
+        <div><span>Vendido por cross-selling</span><b>{pesos(datos.agregados)}</b><small>{pct(datos.agregados, datos.facturado)} de lo facturado</small></div>
+        <div><span>Ventas con cross-selling</span><b>{datos.conAgregado}</b><small>{pct(datos.conAgregado, datos.ventas)} de las ventas</small></div>
       </div>
 
       <div className="informes-panel">
@@ -150,18 +150,10 @@ function Informes() {
 
       <div className="informes-panel">
         <h3>Cross-selling por producto</h3>
-        <p className="metrica">Productos ofrecidos como recomendación: en cuántas ventas se ofreció cada uno, en cuántas se llevó y cuánto se vendió así.</p>
-        {!datos.cruzados.length ? <p className="metrica">No se ofrecieron recomendaciones en este período.</p> : <table>
-          <thead><tr><th>Producto agregado</th><th className="num">Ofrecido</th><th className="num">Llevado</th><th className="num">Aceptación</th><th className="num">Unidades</th><th className="num">Vendido</th></tr></thead>
-          <tbody>{datos.cruzados.map((c, i) => <tr key={i}><td>{c.nombre}</td><td className="num">{c.mostradas}</td><td className="num">{c.aceptadas}</td><td className="num">{pct(c.aceptadas, c.mostradas)}</td><td className="num">{c.unidades}</td><td className="num">{pesos(c.total)}</td></tr>)}</tbody>
-        </table>}
-      </div>
-
-      <div className="informes-panel">
-        <h3>Recomendaciones por regla</h3>
-        {!datos.porRegla.length ? <p className="metrica">Todavía no hay reglas de recomendación.</p> : <table>
-          <thead><tr><th>Regla</th><th className="num">Mostrada</th><th className="num">Aceptada</th><th className="num">Aceptación</th><th className="num">Vendido</th></tr></thead>
-          <tbody>{datos.porRegla.map((r) => <tr key={r.id}><td>{r.nombre}</td><td className="num">{r.mostradas}</td><td className="num">{r.aceptadas}</td><td className="num">{pct(r.aceptadas, r.mostradas)}</td><td className="num">{pesos(r.ingresos)}</td></tr>)}</tbody>
+        <p className="metrica">Productos que se sumaron al primer producto de la venta: en cuántas ventas se sumó cada uno, cuántas unidades y cuánto se vendió así.</p>
+        {!datos.cruzados.length ? <p className="metrica">En este período ninguna venta llevó más de un producto.</p> : <table>
+          <thead><tr><th>Producto agregado</th><th className="num">Ventas</th><th className="num">Unidades</th><th className="num">Vendido</th></tr></thead>
+          <tbody>{datos.cruzados.map((c, i) => <tr key={i}><td>{c.nombre}</td><td className="num">{c.ventas}</td><td className="num">{c.unidades}</td><td className="num">{pesos(c.total)}</td></tr>)}</tbody>
         </table>}
       </div>
     </>}
@@ -178,7 +170,7 @@ function InformeExcel({ desde, hasta }) {
   }
   return <div className="informe-excel">
     <h3>Informe de ventas en Excel</h3>
-    <p>Una fila por venta del período elegido arriba: fecha, comprobante, producto principal, productos agregados por recomendación, precio total y precio de los agregados. Se guarda en la carpeta <b>informes</b> del mostrador.</p>
+    <p>Una fila por venta del período elegido arriba: fecha, comprobante, producto principal, productos agregados (cross-selling), precio total y precio de los agregados. Se guarda en la carpeta <b>informes</b> del mostrador.</p>
     <button className="primario" disabled={estado?.guardando} onClick={guardar}>{estado?.guardando ? "Guardando…" : "Guardar Excel"}</button>
     {estado?.archivo && <p className="aviso ok">Informe guardado ({estado.ventas} ventas): <code>{estado.archivo}</code></p>}
     {estado?.error && <p className="aviso error">{estado.error}</p>}
