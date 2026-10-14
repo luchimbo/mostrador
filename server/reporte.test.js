@@ -21,12 +21,29 @@ test("Informe: separa producto principal y agregados, con el precio cobrado", ()
   assert.equal(fila.totalAgregados, 47500);
 });
 
-test("Informe: es agregado todo lo que se suma al primer producto, venga o no de una recomendación", () => {
+test("Informe: es agregado todo lo que no es el producto principal, venga o no de una recomendación", () => {
   const lineas = [venta.lineas[0], { ...venta.lineas[1], reglaId: null }, { productId: "3", nombre: "Funda", cantidad: 1, total: 30000, reglaId: null }];
   const [fila] = filasReporte([{ ...venta, total: 330000, lineas }]);
   assert.equal(fila.principal, "Teclado");
   assert.equal(fila.agregados, "2 × Pedal + Funda");
   assert.equal(fila.totalAgregados, 80000);
+});
+
+test("Informe: el producto más caro es el principal aunque se haya cargado después", () => {
+  const lineas = [{ productId: "4", nombre: "Cable", cantidad: 1, total: 20000, reglaId: null }, { productId: "5", nombre: "Minilab 3", cantidad: 1, total: 400000, reglaId: null }];
+  const [fila] = filasReporte([{ ...venta, total: 420000, lineas }]);
+  assert.equal(fila.principal, "Minilab 3");
+  assert.equal(fila.agregados, "Cable");
+  assert.equal(fila.totalAgregados, 20000);
+  const e = estadisticas([{ ...venta, total: 420000, lineas }]);
+  assert.equal(e.agregados, 20000);
+  assert.deepEqual(e.cruzados.map((c) => c.nombre), ["Cable"]);
+});
+
+test("Informe: compara por precio unitario, no por total de la línea", () => {
+  const lineas = [{ productId: "1", nombre: "Teclado", cantidad: 1, total: 250000, reglaId: null }, { productId: "6", nombre: "Pua", cantidad: 300, total: 300000, reglaId: null }];
+  const [fila] = filasReporte([{ ...venta, total: 550000, lineas }]);
+  assert.equal(fila.principal, "Teclado");
 });
 
 test("Informe: los productos de prueba no cuentan", () => {
@@ -60,7 +77,7 @@ test("Estadísticas: resumen, días, medios, productos y cross-selling", () => {
   assert.equal(estadisticas([venta], { desde: "2026-10-09T03:00:00.000Z" }).ventas, 0);
 });
 
-test("Estadísticas: es cross-selling todo lo que se suma al primer producto, venga o no de una recomendación", () => {
+test("Estadísticas: es cross-selling todo lo que no es el producto principal, venga o no de una recomendación", () => {
   const lineas = [venta.lineas[0], { ...venta.lineas[1], reglaId: null }, { productId: "3", nombre: "Funda", cantidad: 1, total: 30000, reglaId: null }];
   const e = estadisticas([{ ...venta, total: 330000, lineas }]);
   assert.equal(e.agregados, 80000);

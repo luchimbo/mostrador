@@ -1,9 +1,15 @@
 import ExcelJS from "exceljs";
 import { round2 } from "./pricing.js";
 
-// Informe de ventas: producto principal = el primero que se cargó en la venta;
-// productos agregados (cross-selling) = todos los que se sumaron después, vengan o no de una recomendación.
+// Informe de ventas: producto principal = el más caro de la venta (precio unitario; si empatan, el que se cargó primero);
+// productos agregados (cross-selling) = todos los demás, vengan o no de una recomendación.
 const describir = (lineas) => lineas.map((l) => (l.cantidad > 1 ? `${l.cantidad} × ${l.nombre}` : l.nombre)).join(" + ");
+
+const unitario = (l) => l.total / (l.cantidad || 1);
+function separar(lineas = []) {
+  const i = lineas.reduce((mejor, l, j) => (unitario(l) > unitario(lineas[mejor]) ? j : mejor), 0);
+  return { principal: lineas.slice(i, i + 1), agregados: lineas.filter((_, j) => j !== i) };
+}
 
 const enRango = (ventas, { desde, hasta } = {}) => ventas.filter((v) => (!desde || v.fecha >= desde) && (!hasta || v.fecha < hasta));
 
@@ -30,9 +36,7 @@ export function sinProductosPrueba(ventas, ids = []) {
 export function filasReporte(ventas, rango) {
   return enRango(ventas, rango)
     .map((v) => {
-      const lineas = v.lineas || [];
-      const principales = lineas.slice(0, 1);
-      const agregados = lineas.slice(1);
+      const { principal: principales, agregados } = separar(v.lineas);
       const proporcion = proporcionCobrada(v);
       return {
         fecha: new Date(v.fecha),
@@ -50,7 +54,7 @@ export function filasReporte(ventas, rango) {
 const diaAR = (iso) => new Date(new Date(iso).getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 // Estadísticas del período para la pestaña Informes. Los importes son lo cobrado.
-// Cross-selling: todo producto que se suma al primero que se cargó en la venta.
+// Cross-selling: todo producto de la venta que no es el principal (el más caro).
 export function estadisticas(ventas, { desde, hasta } = {}) {
   const lista = enRango(ventas, { desde, hasta });
   const dias = new Map();
@@ -72,19 +76,17 @@ export function estadisticas(ventas, { desde, hasta } = {}) {
 
   for (const v of lista) {
     const lineas = v.lineas || [];
+    const { agregados: cruzadosVenta } = separar(lineas);
     const proporcion = proporcionCobrada(v);
     facturado += v.total;
     sumar(dias, diaAR(v.fecha), v.total);
     sumar(medios, v.transferencia ? "transferencia" : v.metodoPago || "otros", v.total);
     if (lineas.length > 1) conAgregado++;
-    lineas.forEach((l, i) => {
-      const cobrado = l.total * proporcion;
-      sumarProducto(productos, l, cobrado);
-      if (i > 0) {
-        agregados += cobrado;
-        sumarProducto(cruzados, l, cobrado);
-      }
-    });
+    for (const l of lineas) sumarProducto(productos, l, l.total * proporcion);
+    for (const l of cruzadosVenta) {
+      agregados += l.total * proporcion;
+      sumarProducto(cruzados, l, l.total * proporcion);
+    }
   }
 
   // Los días sin ventas también se muestran, para que el gráfico no los saltee.
