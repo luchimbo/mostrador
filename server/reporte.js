@@ -1,14 +1,14 @@
 import ExcelJS from "exceljs";
-import { round2 } from "./pricing.js";
+import { marcarCrossSelling, round2 } from "./pricing.js";
 
-// Informe de ventas: producto principal = el más caro de la venta (precio unitario; si empatan, el que se cargó primero);
-// productos agregados (cross-selling) = todos los demás, vengan o no de una recomendación.
+// Informe de ventas: productos agregados (cross-selling) = los marcados así en la venta; producto principal = el resto.
+// Por defecto se marca todo lo que no es el más caro (ver marcarCrossSelling), venga o no de una recomendación;
+// las ventas guardadas antes de existir la marca usan esa misma regla.
 const describir = (lineas) => lineas.map((l) => (l.cantidad > 1 ? `${l.cantidad} × ${l.nombre}` : l.nombre)).join(" + ");
 
-const unitario = (l) => l.total / (l.cantidad || 1);
 function separar(lineas = []) {
-  const i = lineas.reduce((mejor, l, j) => (unitario(l) > unitario(lineas[mejor]) ? j : mejor), 0);
-  return { principal: lineas.slice(i, i + 1), agregados: lineas.filter((_, j) => j !== i) };
+  const marcadas = marcarCrossSelling(lineas);
+  return { principal: marcadas.filter((l) => !l.crossSelling), agregados: marcadas.filter((l) => l.crossSelling) };
 }
 
 const enRango = (ventas, { desde, hasta } = {}) => ventas.filter((v) => (!desde || v.fecha >= desde) && (!hasta || v.fecha < hasta));
@@ -54,7 +54,7 @@ export function filasReporte(ventas, rango) {
 const diaAR = (iso) => new Date(new Date(iso).getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 // Estadísticas del período para la pestaña Informes. Los importes son lo cobrado.
-// Cross-selling: todo producto de la venta que no es el principal (el más caro).
+// Cross-selling: los productos marcados así en la venta (por defecto, todo lo que no es el más caro).
 export function estadisticas(ventas, { desde, hasta } = {}) {
   const lista = enRango(ventas, { desde, hasta });
   const dias = new Map();
@@ -81,7 +81,7 @@ export function estadisticas(ventas, { desde, hasta } = {}) {
     facturado += v.total;
     sumar(dias, diaAR(v.fecha), v.total);
     sumar(medios, v.transferencia ? "transferencia" : v.metodoPago || "otros", v.total);
-    if (lineas.length > 1) conAgregado++;
+    if (cruzadosVenta.length) conAgregado++;
     for (const l of lineas) sumarProducto(productos, l, l.total * proporcion);
     for (const l of cruzadosVenta) {
       agregados += l.total * proporcion;

@@ -1,6 +1,6 @@
 // Estado de la venta en curso. El servidor es la única fuente de verdad:
 // la pantalla del vendedor manda acciones y ambas pantallas reciben el mismo estado.
-import { calcularLinea, calcularTotales, descuentoSeguro, METODOS_PAGO, round2 } from "./pricing.js";
+import { calcularLinea, calcularTotales, descuentoSeguro, marcarCrossSelling, METODOS_PAGO, round2 } from "./pricing.js";
 import { obtenerSugerencias, reglaSeDispara } from "./recommendations.js";
 import { comprobanteEmitido } from "./cobranza.js";
 
@@ -46,6 +46,7 @@ export class Sale {
         cantidad: 1,
         reglaId,
         descuentoPct: 0,
+        crossSelling: null, // null = automático (todo lo que no es el más caro)
       });
     }
     this.fase = "venta";
@@ -59,6 +60,13 @@ export class Sale {
     this.totalAjustado = null;
     if (cantidad <= 0) this.quitar(lineId);
     else line.cantidad = Math.floor(cantidad);
+  }
+
+  // El vendedor marca o desmarca una línea como cross-selling; null vuelve a lo automático.
+  marcarCrossSelling(lineId, valor) {
+    const line = this.lines.find((l) => l.lineId === lineId);
+    if (!line) return;
+    line.crossSelling = typeof valor === "boolean" ? valor : null;
   }
 
   quitar(lineId) {
@@ -117,7 +125,7 @@ export class Sale {
     for (const s of sugerencias) this.sugerenciasMostradas.add(`${s.reglaId}:${s.productId}`);
     return {
       fase: this.fase,
-      lines: this.lines.map((l) => ({ ...l, ...calcularLinea(l), recomendado: Boolean(l.reglaId) })),
+      lines: marcarCrossSelling(this.lines.map((l) => ({ ...l, ...calcularLinea(l), recomendado: Boolean(l.reglaId), crossSellingManual: typeof l.crossSelling === "boolean" }))),
       totales: this.totales(settings),
       metodoPago: this.metodoPago,
       sinFactura: this.sinFactura,

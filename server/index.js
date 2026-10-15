@@ -216,7 +216,7 @@ async function accionFacturar(datosCliente) {
       prueba: res.prueba,
       factura: res,
       venta: { lines: sale.lines, inicio: sale.inicio },
-      lineas: snapshot.lines.map((l) => ({ productId: l.productId, nombre: l.nombre, cantidad: l.cantidad, total: l.total, reglaId: l.reglaId })),
+      lineas: snapshot.lines.map((l) => ({ productId: l.productId, nombre: l.nombre, cantidad: l.cantidad, total: l.total, reglaId: l.reglaId, crossSelling: l.crossSelling })),
       sugerenciasMostradas: [...sale.sugerenciasMostradas],
     })]);
     const fallo = guardados.find((g) => g.status === "rejected");
@@ -271,6 +271,7 @@ const ACCIONES = {
   agregar: ({ productId, reglaId }) => sale.agregar(producto(productId), { reglaId }),
   cantidad: ({ lineId, cantidad }) => sale.cambiarCantidad(lineId, Number(cantidad)),
   quitar: ({ lineId }) => sale.quitar(lineId),
+  crossSelling: ({ lineId, valor }) => sale.marcarCrossSelling(lineId, valor),
   metodoPago: ({ metodo }) => sale.setMetodoPago(metodo),
   sinFactura: ({ valor }) => sale.setSinFactura(valor),
   transferencia: ({ valor }) => sale.setTransferencia(valor),
@@ -292,7 +293,7 @@ io.on("connection", (socket) => {
     try {
       if (socket.handshake.auth.soloLectura) throw new Error("La vista de supervisión es de solo lectura.");
       if (!fn) throw new Error(`Acción desconocida: ${msg?.tipo}`);
-      if (["cantidad", "quitar", "metodoPago", "sinFactura", "transferencia", "ajustarTotal"].includes(msg.tipo) && ["facturando", "cobranza", "cobrando"].includes(sale.fase)) throw new Error("Terminá la factura y cobranza antes de modificar la venta.");
+      if (["cantidad", "quitar", "crossSelling", "metodoPago", "sinFactura", "transferencia", "ajustarTotal"].includes(msg.tipo) && ["facturando", "cobranza", "cobrando"].includes(sale.fase)) throw new Error("Terminá la factura y cobranza antes de modificar la venta.");
       const res = await fn(msg);
       ack({ ok: true, ...(res || {}) });
     } catch (err) {

@@ -48,6 +48,7 @@ export default function Supervisor() {
                   <strong>{linea.nombre}</strong>
                   <span className="detalle">{linea.cantidad} × {pesos(linea.precioFinal)}
                     {linea.descuentoPct > 0 && <span className="badge">−{linea.descuentoPct}% recomendado</span>}
+                    {linea.crossSelling && <span className="badge gris">cross-selling</span>}
                   </span>
                 </div>
                 <span className="importe">{pesos(linea.total)}</span>

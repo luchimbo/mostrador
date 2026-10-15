@@ -84,6 +84,16 @@ test("Estadísticas: es cross-selling todo lo que no es el producto principal, v
   assert.deepEqual(e.cruzados.map((c) => c.nombre), ["Pedal", "Funda"]);
 });
 
+test("Informe: respeta la marca de cross-selling elegida por el vendedor", () => {
+  const lineas = [{ ...venta.lineas[0], crossSelling: true }, { ...venta.lineas[1], crossSelling: false }];
+  const [fila] = filasReporte([{ ...venta, lineas }]);
+  assert.equal(fila.principal, "2 × Pedal");
+  assert.equal(fila.agregados, "Teclado");
+  const ninguno = estadisticas([{ ...venta, lineas: venta.lineas.map((l) => ({ ...l, crossSelling: false })) }]);
+  assert.equal(ninguno.agregados, 0);
+  assert.equal(ninguno.conAgregado, 0);
+});
+
 test("Informe: genera un Excel con encabezados y totales", async () => {
   const libro = new ExcelJS.Workbook();
   await libro.xlsx.load(await generarReporteExcel(filasReporte([venta, { ...venta, numero: "0007-2", lineas: venta.lineas.slice(0, 1), total: 237500 }])));

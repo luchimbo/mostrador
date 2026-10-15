@@ -74,6 +74,8 @@ s { color: var(--gris); margin-right: 6px; font-weight: 400; }
 .lineas li { display: grid; grid-template-columns: 1fr auto 100px 28px; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--borde); }
 .linea-info { display: flex; flex-direction: column; }
 .linea-info .detalle { font-size: 0.85em; color: var(--gris); }
+.linea-info .cross-selling { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 0.85em; color: var(--gris); cursor: pointer; width: fit-content; }
+.linea-info .cross-selling small { font-size: 0.9em; opacity: 0.8; }
 .cantidad { display: flex; align-items: center; gap: 6px; }
 .cantidad button { padding: 2px 10px; }
 .importe { text-align: right; font-weight: 600; }

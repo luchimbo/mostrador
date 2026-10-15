@@ -143,6 +143,11 @@ function Lineas({ estado, bloqueado, ejecutar }) {
               {l.descuentoPct > 0 && <span className="badge">-{l.descuentoPct}% recomendado</span>}
               {l.recomendado && l.descuentoPct === 0 && <span className="badge gris">sin descuento</span>}
             </span>
+            <label className="cross-selling" title={l.crossSellingManual ? "Marcado a mano" : "Automático: todo lo que se suma al producto más caro"}>
+              <input type="checkbox" checked={l.crossSelling} disabled={bloqueado}
+                onChange={(e) => ejecutar("crossSelling", { lineId: l.lineId, valor: e.target.checked })} />
+              Cross-selling{!l.crossSellingManual && <small> (auto)</small>}
+            </label>
           </div>
           <div className="cantidad">
             <button disabled={bloqueado} onClick={() => ejecutar("cantidad", { lineId: l.lineId, cantidad: l.cantidad - 1 })}>

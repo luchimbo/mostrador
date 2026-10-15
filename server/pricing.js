@@ -42,6 +42,15 @@ export function calcularLinea(line) {
   return { bruto, descuento, total: round2(bruto - descuento) };
 }
 
+// Cross-selling: por defecto es todo lo que se suma al producto principal, el más caro de la venta
+// (precio unitario; si empatan, el que se cargó primero). El vendedor puede cambiarlo línea por línea
+// (crossSelling true/false); null o ausente = automático. Las líneas necesitan su total.
+export function marcarCrossSelling(lineas = []) {
+  const unitario = (l) => l.total / (l.cantidad || 1);
+  const principal = lineas.reduce((mejor, l, j) => (unitario(l) > unitario(lineas[mejor]) ? j : mejor), 0);
+  return lineas.map((l, j) => ({ ...l, crossSelling: typeof l.crossSelling === "boolean" ? l.crossSelling : j !== principal }));
+}
+
 export function calcularTotales(lines, metodoPago, settings, { transferencia = false } = {}) {
   let subtotal = 0;
   let descuentoRecomendaciones = 0;
