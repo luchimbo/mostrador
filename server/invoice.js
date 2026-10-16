@@ -1,6 +1,6 @@
 // Arma y emite la factura electrónica en Contabilium a partir de la venta en curso.
 import { config } from "./config.js";
-import { clasificarDocumento, formatearDocumento, tipoFactura } from "./documento.js";
+import { clasificarDocumento, formatearDocumento, nombreFiscal, tipoFactura } from "./documento.js";
 import { combinarDescuentos, esContado, repartirTotal, round2 } from "./pricing.js";
 import { importeContabilium } from "./cobranza.js";
 
@@ -39,25 +39,39 @@ async function resolverCliente(backend, datos, { sinFactura = false } = {}) {
   if (["RI", "MO"].includes(condicionIva) && doc.tipo !== "CUIT") throw new Error("Para facturar a un Responsable Inscripto o Monotributista, ingresá su CUIT.");
 
   const existente = await backend.buscarClientePorDocumento(doc.documento);
+  // Para facturas el nombre viene siempre del padrón, incluso si ya existe el cliente.
+  let nombreArca;
+  if (!sinFactura) {
+    const fiscal = await backend.consultarDatosArca(doc.documento);
+    nombreArca = nombreFiscal(fiscal?.nombre);
+    if (!nombreArca) throw new Error("ARCA no devolvió un nombre válido para ese documento. No se emitió la factura.");
+  }
   if (existente) {
     const registrada = normalizarCondicionIva(existente.CondicionIva);
     if (registrada !== condicionIva) {
       const etiquetas = { CF: "Consumidor Final", RI: "Responsable Inscripto", MO: "Monotributista", EX: "Exento" };
       throw new Error(`El cliente está registrado como ${etiquetas[registrada]}. Seleccioná esa condición o corregí sus datos en Contabilium.`);
     }
+    const id = existente.Id ?? existente.id;
+    if (!sinFactura) {
+      if (!id || Number(id) === config.contabilium.idClienteConsumidorFinal) {
+        throw new Error("No se puede usar el cliente Consumidor Final genérico para facturar. Revisá el cliente en Contabilium.");
+      }
+      if (existente.RazonSocial !== nombreArca) await backend.actualizarNombreCliente(id, nombreArca, doc.documento);
+    }
     return {
-      id: existente.Id ?? existente.id,
-      nombre: existente.RazonSocial || existente.NombreFantasia || datos.nombre || "",
+      id,
+      nombre: nombreArca || existente.RazonSocial || existente.NombreFantasia || datos.nombre || "",
       condicionIva,
       documentoTexto: formatearDocumento(doc),
     };
   }
 
-  // Cliente nuevo. Con CUIT necesitamos razón social y condición frente al IVA.
-  if (doc.tipo === "CUIT" && !String(datos.nombre || "").trim()) {
+  // En cotizaciones, un CUIT nuevo puede completar la razón social manualmente.
+  if (sinFactura && doc.tipo === "CUIT" && !String(datos.nombre || "").trim()) {
     return { necesitaDatos: true, documentoTexto: formatearDocumento(doc) };
   }
-  const nombre = (datos.nombre || "").trim() || "Consumidor Final";
+  const nombre = nombreArca || (datos.nombre || "").trim() || "Consumidor Final";
   const id = await backend.crearCliente({
     razonSocial: nombre,
     tipoDoc: doc.tipo,
@@ -65,6 +79,9 @@ async function resolverCliente(backend, datos, { sinFactura = false } = {}) {
     condicionIva,
     email: datos.email,
   });
+  if (!sinFactura && (!id || Number(id) === config.contabilium.idClienteConsumidorFinal)) {
+    throw new Error("Contabilium no devolvió un cliente identificado válido. No se emitió la factura.");
+  }
   return { id, nombre, condicionIva, documentoTexto: formatearDocumento(doc) };
 }
 

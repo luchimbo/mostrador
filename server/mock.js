@@ -78,6 +78,17 @@ export async function buscarClientePorDocumento(documento) {
   return CLIENTES_DEMO.find((c) => c.NroDoc === documento) || null;
 }
 
+export async function consultarDatosArca(documento) {
+  const cliente = CLIENTES_DEMO.find((c) => c.NroDoc === documento);
+  return { nombre: cliente?.RazonSocial || "Cliente de prueba" };
+}
+
+export async function actualizarNombreCliente(id, nombre) {
+  const cliente = CLIENTES_DEMO.find((c) => c.Id === id);
+  if (!cliente) throw new Error("Cliente de prueba inexistente.");
+  cliente.RazonSocial = nombre;
+}
+
 export async function crearCliente(datos) {
   const cliente = { Id: nextClienteId++, RazonSocial: datos.razonSocial, TipoDoc: datos.tipoDoc, NroDoc: datos.documento, CondicionIva: datos.condicionIva };
   CLIENTES_DEMO.push(cliente);

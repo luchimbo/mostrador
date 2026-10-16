@@ -60,7 +60,8 @@ test("Cobranza: un fallo al guardar queda incierto y nunca se reintenta automát
 
 test("Cobranza: usa el total autorizado cuando el redondeo de la factura difiere", async () => {
   const res = await facturar({ backend: {
-    buscarClientePorDocumento: async () => ({ Id: 4, CondicionIva: "CF" }),
+    consultarDatosArca: async () => ({ nombre: "Cliente" }),
+    buscarClientePorDocumento: async () => ({ Id: 4, RazonSocial: "Cliente", CondicionIva: "CF" }),
     emitirFactura: async () => ({ idComprobante: 123, cae: "PRUEBA", total: "999,99" }),
   }, snapshot: { metodoPago: "efectivo", totales: { totalAPagar: 1000 }, lines: [{ productId: "1", precioFinal: 1000, cantidad: 1, iva: 21 }] }, settings: DEFAULT_SETTINGS, datosCliente: { documento: "30123456", condicionIva: "CF" } });
   assert.equal(res.total, 999.99);

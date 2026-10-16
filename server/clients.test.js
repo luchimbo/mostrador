@@ -1,10 +1,46 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buscarClientePorDocumento, encontrarClientePorDocumento } from "./contabilium.js";
+import { actualizarNombreCliente, buscarClientePorDocumento, consultarDatosArca, encontrarClientePorDocumento } from "./contabilium.js";
 import { facturar } from "./invoice.js";
 import { DEFAULT_SETTINGS } from "./store.js";
 
 const registrado = { Id: 85728143, RazonSocial: "Cliente existente", TipoDoc: "DNI", NroDoc: "20-42255201-5", CondicionIva: "CF" };
+
+test("ARCA: consulta por documento y valida nombre e identidad del padrón", async () => {
+  const consultar = async (ruta, params) => {
+    assert.equal(ruta, "/clientes/datosAfip");
+    assert.deepEqual(params, { documento: "42255201" });
+    return { ...registrado, RazonSocial: "  APELLIDO  NOMBRE " };
+  };
+  assert.deepEqual(await consultarDatosArca("42.255.201", consultar), { nombre: "APELLIDO NOMBRE" });
+  for (const invalido of [null, {}, { RazonSocial: "Nombre ajeno", NroDoc: "30123456" }, ...["", "   ", "Consumidor Final", " CONSUMIDOR   FINAL ", "C.F."].map(RazonSocial => ({ ...registrado, RazonSocial }))]) {
+    await assert.rejects(consultarDatosArca("42255201", async () => invalido), /ARCA no devolvió un nombre válido/);
+  }
+  await assert.rejects(consultarDatosArca("42255201", async () => { throw new Error("Padrón no disponible"); }), /Padrón no disponible/);
+});
+
+test("Clientes: actualiza y confirma el nombre fiscal preservando el resto del registro", async () => {
+  const cliente = { ...registrado, RazonSocial: "Consumidor Final", Domicilio: "Dirección", Email: "cliente@example.test", IdProvincia: 1 };
+  let guardado;
+  let lecturas = 0;
+  await actualizarNombreCliente(cliente.Id, "NOMBRE DE ARCA", "42255201", {
+    consultar: async (ruta, params) => { assert.equal(ruta, "/clientes/"); assert.equal(params.id, cliente.Id); lecturas++; return guardado || cliente; },
+    actualizar: async (ruta, body) => { assert.equal(ruta, `/clientes?id=${cliente.Id}`); guardado = body; },
+  });
+  assert.equal(lecturas, 2);
+  assert.deepEqual(guardado, { ...cliente, RazonSocial: "NOMBRE DE ARCA" });
+});
+
+test("Clientes: no actualiza otro documento y exige confirmar que se guardó el nombre", async () => {
+  await assert.rejects(actualizarNombreCliente(registrado.Id, "NOMBRE ARCA", "30123456", {
+    consultar: async () => registrado,
+    actualizar: async () => assert.fail("No actualizar otro cliente"),
+  }), /no coincide/);
+  await assert.rejects(actualizarNombreCliente(registrado.Id, "NOMBRE ARCA", "42255201", {
+    consultar: async () => registrado,
+    actualizar: async () => {},
+  }), /No se pudo confirmar/);
+});
 
 test("Clientes: encuentra por DNI un registro identificado con su CUIL", () => {
   assert.equal(encontrarClientePorDocumento([registrado], "42.255.201"), registrado);
@@ -35,6 +71,7 @@ test("Clientes: recorre las páginas del resultado y no trata un error como clie
 test("Factura: un DNI asociado a un CUIL reutiliza el ID existente sin intentar crear otro cliente", async () => {
   let payload;
   const backend = {
+    consultarDatosArca: async () => ({ nombre: registrado.RazonSocial }),
     buscarClientePorDocumento: (dni) => buscarClientePorDocumento(dni, async () => ({ Items: [registrado], TotalPage: 1 })),
     crearCliente: async () => { assert.fail("No debe crear un cliente duplicado"); },
     emitirFactura: async (datos) => { payload = datos; return { cae: "TEST", numero: "1" }; },

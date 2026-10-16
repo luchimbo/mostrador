@@ -10,7 +10,7 @@
 //   POST /api/comprobantes/crear (TipoFc COT)   cotización: venta en efectivo sin factura
 //   GET  /api/usuarios/obtenerinfo, /api/puntosdeventa/search   diagnóstico
 import { config } from "./config.js";
-import { clasificarDocumento, validarCuit } from "./documento.js";
+import { clasificarDocumento, nombreFiscal, validarCuit } from "./documento.js";
 
 const { baseUrl, clientId, clientSecret } = config.contabilium;
 
@@ -166,6 +166,34 @@ export async function buscarClientePorDocumento(entrada, consultar = get) {
     }
   }
   throw new Error("La búsqueda de clientes devolvió demasiados resultados. No se creó ningún cliente; revisá el documento ingresado.");
+}
+
+export async function consultarDatosArca(entrada, consultar = get) {
+  const { documento } = clasificarDocumento(entrada);
+  const datos = await consultar("/clientes/datosAfip", { documento });
+  const nombre = nombreFiscal(datos?.RazonSocial);
+  if (!nombre || !encontrarClientePorDocumento([datos], documento)) {
+    throw new Error("ARCA no devolvió un nombre válido para ese documento. Revisá el DNI o CUIT antes de facturar.");
+  }
+  return { nombre };
+}
+
+// Leer el registro completo evita borrar domicilio, email u otros datos al actualizar.
+export async function actualizarNombreCliente(id, nombre, documento, { consultar = get, actualizar = (ruta, body) => request("PUT", ruta, { body }) } = {}) {
+  const razonSocial = nombreFiscal(nombre);
+  if (!razonSocial) throw new Error("Falta el nombre fiscal del cliente.");
+  if (!id || Number(id) === config.contabilium.idClienteConsumidorFinal) {
+    throw new Error("No se puede usar el cliente Consumidor Final genérico para facturar. Revisá el cliente en Contabilium.");
+  }
+  const cliente = await consultar("/clientes/", { id });
+  if (String(cliente?.Id) !== String(id) || !encontrarClientePorDocumento([cliente], documento)) {
+    throw new Error("El cliente de Contabilium no coincide con el documento ingresado. No se emitió la factura.");
+  }
+  await actualizar(`/clientes?id=${encodeURIComponent(id)}`, { ...cliente, RazonSocial: razonSocial });
+  const confirmado = await consultar("/clientes/", { id });
+  if (String(confirmado?.Id) !== String(id) || !encontrarClientePorDocumento([confirmado], documento) || nombreFiscal(confirmado.RazonSocial) !== razonSocial) {
+    throw new Error("No se pudo confirmar el nombre del cliente en Contabilium. No se emitió la factura.");
+  }
 }
 
 export async function crearCliente({ razonSocial, tipoDoc, documento, condicionIva, email }) {

@@ -116,7 +116,7 @@ Doble clic en **`iniciar-mostrador.bat`**. Levanta el servidor y abre las dos pa
    - Consumidor Final o Exento → Factura B, identificada con el documento ingresado
    - Responsable Inscripto o Monotributista → CUIT obligatorio y Factura A
    - Cliente existente → la condición elegida debe coincidir con su registro en Contabilium
-   - CUIT nuevo → pide razón social, lo da de alta con la condición elegida y factura
+   - El nombre o razón social se consulta en ARCA por DNI o CUIT; no se factura a nombre de “Consumidor Final”. Si el cliente ya existe con otro nombre, se actualiza en Contabilium y se confirma el cambio antes de emitir. Si el padrón no devuelve un nombre válido o falla la actualización, la factura queda bloqueada.
 5. Se emite según la condición de venta: MercadoPago registra cobranza automática; Efectivo y Otros quedan para cobranza manual. La pantalla del cliente agradece la compra, muestra el QR para dejar una opinión en Google y vuelve al reposo a los 45 segundos.
 
 ## Catálogo: Contabilium + tienda online

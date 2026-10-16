@@ -12,6 +12,7 @@ const snapshot = {
 function escenario(existente = null) {
   const llamadas = { busquedas: [], altas: [], facturas: [] };
   const backend = {
+    consultarDatosArca: async () => ({ nombre: existente?.RazonSocial || "Persona registrada en ARCA" }),
     buscarClientePorDocumento: async (documento) => { llamadas.busquedas.push(documento); return existente; },
     crearCliente: async (datos) => { llamadas.altas.push(datos); return 123; },
     emitirFactura: async (datos) => { llamadas.facturas.push(datos); return { cae: "PRUEBA", numero: "0001", idComprobante: 1 }; },
@@ -36,6 +37,8 @@ test("Factura: Consumidor Final con DNI conserva el documento al dar de alta y e
   assert.equal(llamadas.altas[0].documento, "30123456");
   assert.equal(llamadas.altas[0].tipoDoc, "DNI");
   assert.equal(llamadas.altas[0].condicionIva, "CF");
+  assert.equal(llamadas.altas[0].razonSocial, "Persona registrada en ARCA");
+  assert.equal(resultado.cliente.nombre, "Persona registrada en ARCA");
   assert.equal(llamadas.facturas[0].IdCliente, 123);
 });
 
@@ -50,15 +53,63 @@ test("Factura: reutiliza el cliente identificado y rechaza una condición distin
   assert.equal(llamadas.facturas[0].IdCliente, 45);
 });
 
-test("Factura: CUIT nuevo solicita razón social antes de crear el cliente", async () => {
+test("Factura: CUIT nuevo toma la razón social de ARCA e ignora el nombre ingresado", async () => {
   const { llamadas, emitir } = escenario();
-  const pendiente = await emitir({ documento: "20123456786", condicionIva: "MO" });
-  assert.equal(pendiente.necesitaDatos, true);
-  assert.equal(llamadas.altas.length, 0);
-  assert.equal(llamadas.facturas.length, 0);
   const resultado = await emitir({ documento: "20123456786", condicionIva: "MO", nombre: "Cliente de prueba" });
   assert.equal(resultado.tipo, "Factura A");
   assert.equal(llamadas.altas[0].condicionIva, "MO");
+  assert.equal(llamadas.altas[0].razonSocial, "Persona registrada en ARCA");
+});
+
+test("Factura: corrige el cliente genérico o desactualizado antes de emitir por cualquier modalidad", async () => {
+  for (const automatico of [false, true]) {
+    for (const anterior of ["Consumidor Final", "NOMBRE ANTERIOR", "", "   "]) {
+      const pasos = [];
+      const backend = {
+        obtenerConfiguracionFacturacion: async () => ({ automatico }),
+        buscarClientePorDocumento: async () => ({ Id: 45, RazonSocial: anterior, CondicionIva: "CF" }),
+        consultarDatosArca: async () => ({ nombre: "NOMBRE DE ARCA" }),
+        crearCliente: async () => assert.fail("No duplicar el cliente"),
+        actualizarNombreCliente: async (...args) => { assert.deepEqual(args, [45, "NOMBRE DE ARCA", "30123456"]); pasos.push("actualizar"); },
+        emitirFactura: async () => { pasos.push("manual"); return { cae: "TEST" }; },
+        emitirFacturaCobrada: async () => { pasos.push("automatica"); return { cae: "TEST" }; },
+      };
+      const resultado = await facturar({ backend, snapshot, settings: DEFAULT_SETTINGS, datosCliente: { documento: "30123456", condicionIva: "CF", nombre: "Nombre manual" } });
+      assert.equal(resultado.cliente.nombre, "NOMBRE DE ARCA");
+      assert.deepEqual(pasos, ["actualizar", automatico ? "automatica" : "manual"]);
+    }
+  }
+});
+
+test("Factura: sin nombre de ARCA o si falla la actualización no crea ni emite comprobantes", async () => {
+  for (const existente of [null, { Id: 45, RazonSocial: "Consumidor Final", CondicionIva: "CF" }]) {
+    const backend = {
+      buscarClientePorDocumento: async () => existente,
+      crearCliente: async () => assert.fail("No crear cliente"),
+      actualizarNombreCliente: async () => { throw new Error("No se pudo guardar el nombre"); },
+      emitirFactura: async () => assert.fail("No emitir factura"),
+    };
+    const datos = { backend, snapshot, settings: DEFAULT_SETTINGS, datosCliente: { documento: "30123456", condicionIva: "CF", nombre: "Nombre manual" } };
+    for (const nombre of [undefined, "", "Consumidor Final", "C.F."]) {
+      backend.consultarDatosArca = async () => ({ nombre });
+      await assert.rejects(facturar(datos), /ARCA no devolvió un nombre válido/);
+    }
+    backend.consultarDatosArca = async () => { throw new Error("Padrón no disponible"); };
+    await assert.rejects(facturar(datos), /Padrón no disponible/);
+    if (existente) {
+      backend.consultarDatosArca = async () => ({ nombre: "NOMBRE DE ARCA" });
+      await assert.rejects(facturar(datos), /No se pudo guardar/);
+    }
+  }
+});
+
+test("Factura: no emite si el alta no devuelve un cliente válido", async () => {
+  await assert.rejects(facturar({ backend: {
+    buscarClientePorDocumento: async () => null,
+    consultarDatosArca: async () => ({ nombre: "PERSONA DE ARCA" }),
+    crearCliente: async () => null,
+    emitirFactura: async () => assert.fail("No emitir con un cliente inválido"),
+  }, snapshot, settings: DEFAULT_SETTINGS, datosCliente: { documento: "30123456", condicionIva: "CF" } }), /cliente identificado válido/);
 });
 
 test("Factura sin cobro: admite caja sin configurar y rechaza condiciones automáticas", () => {
@@ -79,7 +130,8 @@ test("Factura: prevalidación fallida no crea clientes ni comprobantes", async (
 
 test("Factura: mantiene ID del borrador rechazado y cobranza manual en la emisión autorizada", async () => {
   const backend = {
-    buscarClientePorDocumento: async () => ({ Id: 4, CondicionIva: "CF" }),
+    consultarDatosArca: async () => ({ nombre: "Persona registrada en ARCA" }),
+    buscarClientePorDocumento: async () => ({ Id: 4, RazonSocial: "Persona registrada en ARCA", CondicionIva: "CF" }),
     emitirFactura: async () => ({ idComprobante: 1234, cae: "", errores: "Rechazado" }),
   };
   const datos = { backend, snapshot, settings: DEFAULT_SETTINGS, datosCliente: { documento: "30123456", condicionIva: "CF" } };

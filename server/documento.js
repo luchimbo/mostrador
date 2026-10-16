@@ -1,5 +1,12 @@
 // Clasificación y validación de DNI / CUIT.
 
+// Un nombre fiscal nunca puede ser la etiqueta de la condición frente al IVA.
+export function nombreFiscal(valor) {
+  const nombre = typeof valor === "string" ? valor.trim().replace(/\s+/g, " ") : "";
+  const clave = nombre.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/gi, "").toLowerCase();
+  return !clave || ["consumidorfinal", "cf"].includes(clave) ? "" : nombre;
+}
+
 export function validarCuit(cuit) {
   if (!/^\d{11}$/.test(cuit)) return false;
   const pesos = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];

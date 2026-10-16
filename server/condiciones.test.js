@@ -13,7 +13,8 @@ test("Condiciones: MercadoPago cobra; Efectivo y Otros emiten con cobranza pendi
     const respuesta = { idComprobante: 123, cae: "PRUEBA", errores: "" };
     const resultado = await facturar({ backend: {
       obtenerConfiguracionFacturacion: async () => ({ condicionVenta, automatico, inventario: 1662 }),
-      buscarClientePorDocumento: async () => ({ Id: 4, CondicionIva: "CF" }),
+      consultarDatosArca: async () => ({ nombre: "Cliente" }),
+      buscarClientePorDocumento: async () => ({ Id: 4, RazonSocial: "Cliente", CondicionIva: "CF" }),
       emitirFactura: async (p) => { ruta = "manual"; assert.equal(p.Pagos, null); assert.equal(p.CondicionVenta, condicionVenta); return respuesta; },
       emitirFacturaCobrada: async (p) => { ruta = "automatica"; assert.equal(p.Pagos, null); assert.equal(p.CondicionVenta, condicionVenta); return respuesta; },
     }, snapshot: { lines, metodoPago: metodo, totales }, settings: DEFAULT_SETTINGS, datosCliente: { documento: "30123456", condicionIva: "CF" } });
@@ -26,7 +27,8 @@ test("Condiciones: MercadoPago cobra; Efectivo y Otros emiten con cobranza pendi
 test("MercadoPago: CAE con error de cobranza se conserva como emitida para revisar", async () => {
   const res = await facturar({ backend: {
     obtenerConfiguracionFacturacion: async () => ({ condicionVenta: "MercadoPago", automatico: true }),
-    buscarClientePorDocumento: async () => ({ Id: 4, CondicionIva: "CF" }),
+    consultarDatosArca: async () => ({ nombre: "Cliente" }),
+    buscarClientePorDocumento: async () => ({ Id: 4, RazonSocial: "Cliente", CondicionIva: "CF" }),
     emitirFacturaCobrada: async () => ({ idComprobante: 123, cae: "PRUEBA", errores: "Error en cobranza" }),
   }, snapshot: { lines: [{ productId: "1", precioFinal: 12100, iva: 21, cantidad: 1 }], metodoPago: "mercadopago", totales: { totalAPagar: 12100 } }, settings: DEFAULT_SETTINGS, datosCliente: { documento: "30123456", condicionIva: "CF" } });
   assert.equal(res.cae, "PRUEBA");
@@ -54,7 +56,8 @@ test("Comprobante en pesos aunque el producto esté cargado en dólares", async 
   let enviado;
   await facturar({ backend: {
     obtenerConfiguracionFacturacion: async () => ({ condicionVenta: "Efectivo", automatico: false, inventario: 1662, idMoneda: 1659 }),
-    buscarClientePorDocumento: async () => ({ Id: 4, CondicionIva: "CF" }),
+    consultarDatosArca: async () => ({ nombre: "Cliente" }),
+    buscarClientePorDocumento: async () => ({ Id: 4, RazonSocial: "Cliente", CondicionIva: "CF" }),
     emitirFactura: async (p) => { enviado = p; return { idComprobante: 123, cae: "PRUEBA", errores: "" }; },
   }, snapshot: { lines, metodoPago: "efectivo", totales: calcularTotales(lines, "efectivo", DEFAULT_SETTINGS) }, settings: DEFAULT_SETTINGS, datosCliente: { documento: "30123456", condicionIva: "CF" } });
   assert.equal(enviado.IDMoneda, 1659);
