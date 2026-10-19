@@ -186,3 +186,9 @@ Falta: conexión de PC MIDI en Logitrack con permisos de descuentos y scripts, c
 - Clave de publicación propia de 78394 en Vercel (`CROSS_SELLING_PUBLISH_KEYS`) y en Mostrador. Mostrador apunta a 78394 (`.env`; la clave de la demo quedó en `CROSS_SELLING_PUBLISH_KEY_7570182`). Primera publicación: 282 productos vinculados, 74 excluidos. Se subió la espera de publicación a 90 s.
 - Script 11451: v.3 (cargador para 7570182 y 78394) activa en producción y asociada a 78394. Hubo que quitar y volver a instalar la asociación después de activar la versión. Tiendanube tardó unos minutos en incluirla y las páginas de producto cacheadas pueden tardar más; `/comprar/` la incluyó primero.
 - Estado: el script carga y, con el módulo apagado, no muestra nada. Falta activar desde Mostrador y probar con un carrito real.
+
+## Activo en PC MIDI (19/10/2026)
+
+- `main` en GitHub con el cross-selling online (`f262da6`), desplegado en Railway con las variables `CROSS_SELLING_*`. Railway publicó sus reglas (10 reglas, 282 productos) y el módulo se activó desde su interruptor (promoción `9a1ad522-…`).
+- Prueba real en `pcmidi.com.ar`, sin comprar: con el teclado MK2083 en el carrito, `/comprar/` mostró «Completá tu equipo» con la funda Meike chica, el soporte tijera y los auriculares, al 10%. Aceptar la funda la agregó y Tiendanube aplicó **-$705,59**. El carrito de prueba quedó vacío.
+- Pendiente: las páginas de producto de PC MIDI salen del caché de Tiendanube anterior a la instalación del script. Hasta que se renueve, la ventana al agregar al carrito no aparece; en el carrito sí.
