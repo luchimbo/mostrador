@@ -91,7 +91,8 @@ El manifest registra hashes y la prueba de Logitrack verifica la integridad de s
 3. Probar en un checkout real: aplicación, retirada, cantidades, centavos, transferencia y cupón. TN agrupa medios de pago y cupones en una opción; el evaluador excluye carritos con cupones.
 4. Implementar el callback HTTP, persistencia de carritos/aceptaciones, autenticación de identidad del carrito y aceptación validada en servidor. El evaluador puro existente no sustituye esas interfaces. Publicar y aceptar ofertas requiere una identidad de carrito verificable, no un ID enviado sin validación por el navegador.
 5. Implementar el módulo visual al agregar y en el carrito, selección de variante, refresco de catálogo TN, manejo de información vencida y métricas por canal a partir de pedidos confirmados.
-6. Habilitar una selección piloto en la tienda de prueba. Sólo después extender a PC MIDI y verificar su tema Amazonas por separado.
+6. Hecho el 19/10/2026: interruptor «Activo en la tienda online» en Ajustes → Cross-selling online. Usa `PUT/GET /api/cross-selling/module` en Logitrack con la misma firma HMAC que la publicación; por ahora sólo admite la demo. Probado: desactivar y reactivar contra la demo (promoción `cd9be1bb-…` inactiva y otra vez activa). Despliegue vigente: `dpl_3TEed6hH81SYi6kk7WDGL1neASYC`.
+7. Habilitar una selección piloto en la tienda de prueba. Sólo después extender a PC MIDI y verificar su tema Amazonas por separado.
 
 No hay endpoints comerciales públicos de sugerencias o aceptaciones ni cambios en el tema en esta etapa. Existe un callback exclusivamente de prueba. Tampoco se implementó aún la medición de ventas online o la activación en producción.
 
