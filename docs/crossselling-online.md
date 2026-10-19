@@ -169,3 +169,13 @@ Implementado el 19/10/2026 (Logitrack `97fd8ee`, despliegue `dpl_G39XBkTdyWaLYve
 3. Riesgo residual mientras tanto: con la URL secreta se podría enviar un carrito falso al callback. No aplica descuentos (sólo TN los aplica), pero podría ensuciar los eventos que validan aceptaciones. La lista de IPs lo cierra.
 
 Referencias: [Discount API](https://tiendanube.github.io/api-documentation/v1/resources/discounts), [Scripts](https://tiendanube.github.io/api-documentation/v1/resources/script).
+
+## Preparación para PC MIDI (19/10/2026)
+
+Logitrack `4a6f8a7`, despliegue `dpl_Ez8wNXfVdCzN7hju5DZR4PYX1j1V`:
+- Tiendas habilitadas en `src/lib/crossselling/stores.js`: demo 7570182 y PC MIDI 78394 (`www.pcmidi.com.ar`, `pcmidi.com.ar`, `tiendahsr.mitiendanube.com`). Habilitarla no la activa.
+- Estado, Redis, publicación, firma del callback (`&st=78394`) y cliente TN por tienda. La URL de la demo no cambió y se volvió a probar: -$3.625,28 aplicado.
+- Tema Amazonas: no tiene carrito lateral. Usa el mismo evento `productAddedToCart`; las ofertas se muestran en la ventana al agregar y en `/comprar/` dentro de `form.cart-body`, antes de los totales.
+- Cargador para Partners actualizado para aceptar 78394: subir como nueva versión (v.3) y pasarla a producción, porque PC MIDI no es la tienda demo de Partners.
+
+Falta: conexión de PC MIDI en Logitrack con permisos de descuentos y scripts, clave de publicación de 78394, Mostrador apuntando a 78394, script asociado a PC MIDI, activación y compra chica de prueba.
