@@ -147,3 +147,35 @@ test("stock negativo de Contabilium no invalida la publicación: se trata como s
   const snapshot = make({ products: [...products, { ...products[0], id: "neg", codigo: "NEG1", stock: -3 }] });
   assert.equal(snapshot.products.find((p) => p.id === "neg").stock, 0);
 });
+
+test("módulo de la tienda: lectura y cambio firmados en la ruta del módulo", async () => {
+  const sent = [];
+  const pub = publisher(async (url, options) => {
+    sent.push({ url: String(url), method: options.method, body: options.body, headers: options.headers });
+    const enabled = options.method === "PUT" ? JSON.parse(options.body).enabled : false;
+    return { ok: true, json: async () => ({ storeId: "7570182", enabled, promotion: null, script: { found: true } }) };
+  });
+  assert.equal((await pub.moduleStatus()).module.enabled, false);
+  const result = await pub.setModule(true);
+  assert.equal(result.module.enabled, true);
+  assert.equal(pub.status().module.enabled, true);
+  for (const r of sent) {
+    const url = new URL(r.url);
+    assert.equal(url.pathname + url.search, "/api/cross-selling/module?storeId=7570182");
+    assert.ok(verifyPublication({ key: "a".repeat(32), method: r.method, path: url.pathname + url.search,
+      timestamp: r.headers["x-mostrador-timestamp"], signature: r.headers["x-mostrador-signature"], body: r.body || "", now: now.getTime() }));
+  }
+  assert.deepEqual(sent.map((r) => [r.method, r.body]), [["GET", undefined], ["PUT", '{"enabled":true}']]);
+  await assert.rejects(pub.setModule("si"), /activo o inactivo/);
+});
+
+test("módulo de la tienda: muestra el error de Logitrack y rechaza confirmaciones distintas", async () => {
+  const refused = publisher(async () => ({ ok: false, status: 403, json: async () => ({ error: "El módulo todavía no está habilitado para esta tienda" }) }));
+  await assert.rejects(refused.setModule(true), /no está habilitado para esta tienda \(HTTP 403\)/);
+  const unsigned = publisher(async () => ({ ok: false, status: 401, json: async () => { throw new Error("sin cuerpo"); } }));
+  await assert.rejects(unsigned.moduleStatus(), /no pudo cambiar el módulo \(HTTP 401\)/);
+  const stale = publisher(async () => ({ ok: true, json: async () => ({ enabled: false }) }));
+  await assert.rejects(stale.setModule(true), /no confirmó/);
+  const missing = createOnlinePublisher({ connection: {}, read: () => ({}), write: async () => {}, source: () => ({}) });
+  await assert.rejects(missing.setModule(true), /Configurá la conexión/);
+});

@@ -361,6 +361,15 @@ app.post("/api/crossselling-online/estado", async (_req, res) => {
   try { res.json(await onlinePublisher.remoteStatus()); }
   catch (err) { res.status(502).json({ error: err.message }); }
 });
+app.get("/api/crossselling-online/modulo", async (_req, res) => {
+  try { res.json(await onlinePublisher.moduleStatus()); }
+  catch (err) { res.status(502).json({ error: err.message }); }
+});
+app.put("/api/crossselling-online/modulo", async (req, res) => {
+  if (typeof req.body?.enabled !== "boolean") return res.status(400).json({ error: "Indicá enabled: true o false." });
+  try { res.json(await onlinePublisher.setModule(req.body.enabled)); }
+  catch (err) { res.status(502).json({ error: err.message }); }
+});
 app.put("/api/reglas", async (req, res) => {
   if (!Array.isArray(req.body)) return res.status(400).json({ error: "Se esperaba una lista de reglas." });
   await writeJson("reglas.json", req.body);

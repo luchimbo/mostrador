@@ -417,3 +417,5 @@ s { color: var(--gris); margin-right: 6px; font-weight: 400; }
   .gracias-codigos .qr span { font-size: clamp(12px, 2vmin, 28px); }
   .estrellas { font-size: clamp(24px, 4.2vmin, 56px); }
 }
+.modulo-online { margin: 12px 0; }
+.modulo-online .check { display: flex; gap: 8px; align-items: center; }
