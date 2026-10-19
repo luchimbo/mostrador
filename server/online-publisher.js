@@ -18,7 +18,7 @@ export function createOnlinePublisher({ connection, read, write, source, fetchIm
     const url = new URL(endpoint, base);
     url.searchParams.set("storeId", connection.storeId);
     const path = url.pathname + url.search, timestamp = String(now().getTime());
-    const response = await fetchImpl(url, { method, body: method === "GET" ? undefined : body, redirect: "error", signal: AbortSignal.timeout(20_000),
+    const response = await fetchImpl(url, { method, body: method === "GET" ? undefined : body, redirect: "error", signal: AbortSignal.timeout(method === "PUT" ? 90_000 : 20_000),
       headers: { "Content-Type": "application/json", "x-mostrador-timestamp": timestamp,
         "x-mostrador-signature": publicationSignature({ key: connection.key, method, path, timestamp, body }) } });
     if (!response.ok) {
