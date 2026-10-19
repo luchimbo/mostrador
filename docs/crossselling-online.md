@@ -179,3 +179,10 @@ Logitrack `4a6f8a7`, despliegue `dpl_Ez8wNXfVdCzN7hju5DZR4PYX1j1V`:
 - Cargador para Partners actualizado para aceptar 78394: subir como nueva versión (v.3) y pasarla a producción, porque PC MIDI no es la tienda demo de Partners.
 
 Falta: conexión de PC MIDI en Logitrack con permisos de descuentos y scripts, clave de publicación de 78394, Mostrador apuntando a 78394, script asociado a PC MIDI, activación y compra chica de prueba.
+
+## PC MIDI conectada (19/10/2026)
+
+- PC MIDI no estaba conectada a GeoModi en ningún espacio. Se conectó desde el espacio 2 (`luciopcmidi@gmail.com`) con todos los permisos, incluidos `write_discounts` y `write_scripts`. Efectos: 11 webhooks de pedidos hacia GeoModi y PC MIDI como tienda principal del espacio 2.
+- Clave de publicación propia de 78394 en Vercel (`CROSS_SELLING_PUBLISH_KEYS`) y en Mostrador. Mostrador apunta a 78394 (`.env`; la clave de la demo quedó en `CROSS_SELLING_PUBLISH_KEY_7570182`). Primera publicación: 282 productos vinculados, 74 excluidos. Se subió la espera de publicación a 90 s.
+- Script 11451: v.3 (cargador para 7570182 y 78394) activa en producción y asociada a 78394. Hubo que quitar y volver a instalar la asociación después de activar la versión. Tiendanube tardó unos minutos en incluirla y las páginas de producto cacheadas pueden tardar más; `/comprar/` la incluyó primero.
+- Estado: el script carga y, con el módulo apagado, no muestra nada. Falta activar desde Mostrador y probar con un carrito real.
