@@ -150,4 +150,22 @@ Prueba real del 19/10/2026 (módulo activo en el espacio 2, promoción `cd9be1bb
 - Al cargar la página, los ítems de `LS.cart` no traen `cart_id` (sí `LS.cart.id`); el script usa ese valor como alternativa.
 - Correcciones descubiertas: `/comprar/` requiere `X-Requested-With: XMLHttpRequest` para responder JSON, y TN tarda unos segundos en usar el callback actualizado (el script espera 4 s antes de agregar). La lista `/scripts` de TN llega como `{ result, total }` e incluye scripts no asociados a la tienda.
 
+## Producción: decisión sobre aceptaciones y autenticación (19/10/2026)
+
+Datos:
+- Las funciones de Logitrack corren en `gru1` (São Paulo).
+- TN da 800 ms para responder; si se pasa o la respuesta es inválida, retira los descuentos.
+- La consulta a Turso desde el callback tardó entre 475 y 1229 ms.
+- Documentación de TN: la autenticación actual es una lista de IPs permitidas que comparte TN («WAF»). La «comunicación firmada» con un secreto por app está anunciada, sin cabeceras ni algoritmo publicados. No hay política de reintentos documentada.
+
+Recomendación:
+1. **Aceptaciones en Upstash Redis** (Vercel Marketplace, región `sa-east-1`, junto a `gru1`). El callback hace una sola lectura por carrito (~1–5 ms). La aceptación se escribe con vencimiento de 2 h. Los eventos del callback también van ahí, para que la aceptación no espere a Turso. Se descarta Edge Config: lecturas rápidas, pero escrituras lentas y limitadas, no apta para datos por carrito. Turso queda para la configuración publicada, cacheada en memoria fuera del camino crítico.
+2. **Callback con URL fija y secreta** (token HMAC en la ruta, sin aceptaciones), más **lista de IPs de TN** aplicada en el Firewall de Vercel sólo para esa ruta. Pedir las IPs a soporte de Partners. Cuando TN publique la firma, validarla y quitar la lista de IPs.
+Implementado el 19/10/2026 (Logitrack `97fd8ee`, despliegue `dpl_G39XBkTdyWaLYve3WvKKJQPL5Ba3`):
+- Upstash Redis conectado a `logitrack` (`KV_REST_API_*`). URL del callback fija y aceptaciones en Redis.
+- Prueba real: aceptar la banqueta con el AK490 aplicó «Completá tu equipo: -$3.625,28» unos 2,9 s después del clic, sin la espera de propagación. Al quitar el AK490 se retiró. Sin Redis, el código vuelve solo al modo URL.
+- Pendiente: lista de IPs de TN en el Firewall de Vercel (pedidas a soporte de Partners).
+
+3. Riesgo residual mientras tanto: con la URL secreta se podría enviar un carrito falso al callback. No aplica descuentos (sólo TN los aplica), pero podría ensuciar los eventos que validan aceptaciones. La lista de IPs lo cierra.
+
 Referencias: [Discount API](https://tiendanube.github.io/api-documentation/v1/resources/discounts), [Scripts](https://tiendanube.github.io/api-documentation/v1/resources/script).
