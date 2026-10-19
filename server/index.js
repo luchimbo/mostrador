@@ -15,6 +15,7 @@ import { almacenamiento, appendLog, getSettings, guardarCopia, readJson, readLog
 import { actualizarPreciosTienda, combinarConTienda, estadoTienda, sincronizarTienda, tiendaSinContabilium } from "./tiendanube.js";
 import { productosEnReposo } from "../shared/display.js";
 import { incluirProductosPrueba } from "./catalog.js";
+import { createOnlinePublisher } from "./online-publisher.js";
 import { comprobanteEmitido, registrarCobranza } from "./cobranza.js";
 import { estadisticas, filasReporte, generarReporteExcel, sinProductosPrueba } from "./reporte.js";
 
@@ -43,6 +44,7 @@ function actualizarTienda({ completa = false } = {}) {
       if (completa) await sincronizarTienda();
       await actualizarPreciosTienda();
       productsById = indexar(catalogo.productos);
+      onlinePublisher.schedule();
       errorTienda = null;
     } catch (err) {
       errorTienda = err.message;
@@ -67,6 +69,7 @@ async function actualizarCatalogo() {
       reglasPendientes = false;
     }
     errorCatalogo = null;
+    onlinePublisher.schedule();
     console.log(`[catálogo] ${productos.length} productos`);
   } catch (err) {
     errorCatalogo = err.message;
@@ -84,6 +87,9 @@ if (!reglas) {
   if (!reglasPendientes) await writeJson("reglas.json", reglas);
 }
 let destacados = readJson("destacados.json", config.mode === "mock" ? ["102", "202", "301", "502", "701"] : []);
+
+const onlinePublisher = createOnlinePublisher({ connection: config.onlineCrossSelling, read: readJson, write: writeJson,
+  source: () => ({ products: [...productsById.values()], rules: reglas, settings: getSettings() }) });
 
 // ---------- Venta en curso ----------
 const sale = new Sale();
@@ -346,10 +352,20 @@ app.post("/api/tienda/actualizar", async (_req, res) => {
 app.get("/api/tienda/faltantes", (_req, res) => res.json(tiendaSinContabilium(catalogo.productos)));
 
 app.get("/api/reglas", (_req, res) => res.json(reglas));
+app.get("/api/crossselling-online", (_req, res) => res.json(onlinePublisher.status()));
+app.post("/api/crossselling-online/publicar", async (_req, res) => {
+  try { res.json(await onlinePublisher.publish()); }
+  catch (err) { res.status(502).json({ error: err.message }); }
+});
+app.post("/api/crossselling-online/estado", async (_req, res) => {
+  try { res.json(await onlinePublisher.remoteStatus()); }
+  catch (err) { res.status(502).json({ error: err.message }); }
+});
 app.put("/api/reglas", async (req, res) => {
   if (!Array.isArray(req.body)) return res.status(400).json({ error: "Se esperaba una lista de reglas." });
   await writeJson("reglas.json", req.body);
   reglas = req.body;
+  onlinePublisher.schedule();
   broadcast();
   res.json(reglas);
 });
@@ -368,6 +384,7 @@ app.put("/api/ajustes", async (req, res) => {
   if (!req.body || Array.isArray(req.body) || typeof req.body !== "object") return res.status(400).json({ error: "Se esperaba un objeto de ajustes." });
   try {
     const next = await saveSettings(req.body || {});
+    onlinePublisher.schedule();
     broadcast();
     res.json(next);
   } catch (err) {

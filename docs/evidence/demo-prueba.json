@@ -1,0 +1,149 @@
+{
+  "enabled": false,
+  "events": [
+    {
+      "at": "2026-10-16T18:52:55.666Z",
+      "cartId": "2096273884",
+      "commands": [
+        {
+          "command": "remove_discount",
+          "specs": {
+            "promotion_ids": [
+              "3ad5cdaf-facf-4f1c-a074-9c3f30a56c12"
+            ],
+            "scope": "cart"
+          }
+        }
+      ],
+      "currency": "ARS",
+      "elapsedMs": 0,
+      "products": [
+        {
+          "id": 3610140726,
+          "price": "30673.20",
+          "quantity": 2,
+          "variantId": 1503397906
+        }
+      ],
+      "promotions": [
+        {
+          "id": "3ad5cdaf-facf-4f1c-a074-9c3f30a56c12",
+          "lineItems": [
+            "3610140726"
+          ]
+        }
+      ],
+      "region": "gru1",
+      "tier": "line_item"
+    },
+    {
+      "at": "2026-10-16T18:52:38.627Z",
+      "cartId": "2096273884",
+      "commands": [
+        {
+          "command": "create_or_update_discount",
+          "specs": {
+            "currency": "ARS",
+            "display_text": {
+              "es-ar": "Prueba Completá tu equipo"
+            },
+            "line_items": [
+              {
+                "discount_specs": {
+                  "amount": "1.00",
+                  "type": "fixed"
+                },
+                "line_item": "3610140726"
+              }
+            ],
+            "promotion_id": "3ad5cdaf-facf-4f1c-a074-9c3f30a56c12"
+          }
+        }
+      ],
+      "currency": "ARS",
+      "elapsedMs": 1,
+      "products": [
+        {
+          "id": 3610140726,
+          "price": "30673.20",
+          "quantity": 2,
+          "variantId": 1503397906
+        },
+        {
+          "id": 3610139845,
+          "price": "162985.80",
+          "quantity": 1,
+          "variantId": 1503397959
+        }
+      ],
+      "promotions": [
+        {
+          "id": "3ad5cdaf-facf-4f1c-a074-9c3f30a56c12",
+          "lineItems": [
+            "3610140726"
+          ]
+        }
+      ],
+      "region": "gru1",
+      "tier": "line_item"
+    },
+    {
+      "at": "2026-10-16T18:52:23.055Z",
+      "cartId": "2096273884",
+      "commands": [
+        {
+          "command": "create_or_update_discount",
+          "specs": {
+            "currency": "ARS",
+            "display_text": {
+              "es-ar": "Prueba Completá tu equipo"
+            },
+            "line_items": [
+              {
+                "discount_specs": {
+                  "amount": "1.00",
+                  "type": "fixed"
+                },
+                "line_item": "3610140726"
+              }
+            ],
+            "promotion_id": "3ad5cdaf-facf-4f1c-a074-9c3f30a56c12"
+          }
+        }
+      ],
+      "currency": "ARS",
+      "elapsedMs": 1,
+      "products": [
+        {
+          "id": 3610140726,
+          "price": "30673.20",
+          "quantity": 2,
+          "variantId": 1503397906
+        },
+        {
+          "id": 3610139845,
+          "price": "162985.80",
+          "quantity": 1,
+          "variantId": 1503397959
+        }
+      ],
+      "promotions": [],
+      "region": "gru1",
+      "tier": "line_item"
+    }
+  ],
+  "promotions": [
+    {
+      "active": false,
+      "allocation_type": "line_item",
+      "combines_with_app_discounts": false,
+      "combines_with_cart_amount_discounts": true,
+      "combines_with_free_shipping": true,
+      "combines_with_price_discounts": true,
+      "combines_with_quantity_discounts": false,
+      "id": "3ad5cdaf-facf-4f1c-a074-9c3f30a56c12",
+      "name": "LogiTrack · prueba cross-selling $1"
+    }
+  ],
+  "storeId": "7570182"
+}

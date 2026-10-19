@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, buscar, pesos } from "./lib.js";
 import PantallaReposo from "./PantallaReposo.jsx";
+import OnlineCrossSelling from "./OnlineCrossSelling.jsx";
 import { coincideNombre } from "../shared/reglas.js";
 
 const coincideDisparador = (regla, p) => !regla.sugeridos.map(String).includes(String(p.id)) && coincideNombre(regla.disparador, p);
@@ -23,6 +24,7 @@ export default function Admin() {
             ["reglas", "Recomendaciones"],
             ["destacados", "Pantalla en reposo"],
             ["tienda", "Tienda online"],
+            ["crossselling-online", "Cross-selling online"],
             ["ajustes", "Descuentos y topes"],
             ["facturas", "Facturas emitidas"],
             ["informes", "Informes"],
@@ -36,6 +38,7 @@ export default function Admin() {
       {tab === "reglas" && <Reglas productos={productos} porId={porId} />}
       {tab === "destacados" && <PantallaReposo productos={productos} porId={porId} SelectorProducto={SelectorProducto}><Destacados productos={productos} porId={porId} /></PantallaReposo>}
       {tab === "tienda" && <Tienda productos={productos} onActualizado={cargarCatalogo} />}
+      {tab === "crossselling-online" && <OnlineCrossSelling />}
       {tab === "ajustes" && <Ajustes />}
       {tab === "facturas" && <FacturasEmitidas />}
       {tab === "informes" && <Informes />}

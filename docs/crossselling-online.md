@@ -1,0 +1,152 @@
+# Cross-selling online: estado y puesta en marcha
+
+Implementación preparatoria en Mostrador y Logitrack. Las reglas comerciales están desactivadas. Se comprobó un descuento temporal de $1 y su retirada en la demo, y se dejó esa promoción desactivada al terminar.
+
+## Implementado
+
+- Motor común en `shared/`: reglas, nombres/exclusiones, orden, límite de sugerencias y descuentos con margen mínimo. Mostrador lo utiliza mediante sus exports anteriores.
+- Adaptador de catálogo por SKU y variante. Descarta SKUs ambiguos, productos despublicados, sin precio, sin stock y de prueba.
+- Evaluador puro de comandos de descuentos: aceptación por tienda/carrito/variante/regla/versión, vencimiento, retirada del principal, desactivación y cantidades. Usa el precio autoritativo del callback para recalcular el margen.
+- Publicación HMAC SHA-256 por tienda, ventana de cinco minutos, versión de contenido y protección contra publicaciones anteriores. La clave permanece en los servidores.
+- Recepción persistente en Logitrack con esquema propio. Las fallas no reemplazan la última configuración válida. El estado público no incluye costos ni tokens.
+- Panel **Ajustes → Cross-selling online** para elegir reglas, publicar y consultar estado. Los cambios guardados en reglas, ajustes y catálogo vuelven a publicar si se configuró la conexión.
+- Cliente de TN ampliado para catálogo, promociones y registro del callback. El guardado de configuración no registra callbacks ni crea promociones.
+
+## Verificación real realizada el 16 de octubre de 2026
+
+- PC MIDI: tienda `78394`, tema **Amazonas**.
+- `logitrackprueba.mitiendanube.com`: tienda `7570182`, tema **Morelia**.
+- La demo quedó vinculada al workspace 2 en el servidor real. El diagnóstico autenticado confirmó tienda, catálogo y promociones accesibles. Scopes efectivos: `read_discounts`, `write_discounts`, `write_scripts`, además de los permisos de logística existentes. **No repetir OAuth ni cambiar permisos.**
+- Las credenciales locales de Logitrack conservan una base inaccesible y otra con datos antiguos. No representan el estado actual de la conexión desplegada.
+- El proyecto Vercel asociado localmente es `logitrack-tan`; el proyecto de la app pública es `logitrack` (`geomodi.ai`). Verificar el destino antes de desplegar. Los valores sensibles exportados de Vercel no estuvieron disponibles para una comprobación adicional.
+
+## Configuración de servidores
+
+Se verificaron guardados **Edit Discounts** y **Add Scripts** en LogiTrack2 (`30102`); la autorización nueva de la demo funciona. PC MIDI (`78394`) no se utilizó como sustituto de la demo ni se modificaron sus promociones.
+
+Se corrigió el recorrido OAuth de Logitrack: el callback regresa a `/app`, el login/registro conservan un destino interno validado con el ID de tienda y las URLs antiguas de la portada se recuperan. También se corrigieron la doble decodificación de errores y la comparación de vencimientos ISO en SQLite. La publicación aislada de estas correcciones se detalla abajo.
+
+### Despliegue de la corrección de conexión
+
+La corrección OAuth y el acceso inicial a módulos de proveedores se publicaron en el proyecto correcto `logitrack`. Se partió de la misma revisión que estaba publicada (`6281210d9175668887b8831130474e10c9c1df2e`) y se preparó un checkout aislado en `C:\Users\PC Midi\AppData\Local\Temp\logitrack-tn-20261016`, sin incluir los cambios pendientes de logística/finanzas ni el cross-selling completo.
+
+- Nuevo despliegue: `dpl_Bi7bNSYkFReXC3Ws8m9qzu4dkDiA`, `https://logitrack-g94aln90g-lucio-tamborinis-projects.vercel.app`, promovido a `www.geomodi.ai`.
+- Despliegue anterior para reversión: `dpl_FzqzBaAVCy7mSjuiq4VdRzymgyfM`.
+- Comprobaciones del checkout aislado: 42 pruebas, lint y compilación correctos; HTTP 307 del regreso antiguo al módulo TN conservando el ID y HTTP 401 del diagnóstico sin sesión.
+- Diagnóstico autenticado de sólo lectura: `/api/admin/tiendanube/cross-selling/status?storeId=7570182`. Verifica la conexión del workspace del usuario, catálogo, promociones y scopes sin mostrar credenciales.
+- Se confirmó el problema de navegación publicado: los módulos de proveedores sin conexión previa eran desviados a Subir Etiquetas. Se habilitó su apertura para usuarios autenticados, conservando la autorización de sus APIs.
+- Las verificaciones locales con `.env.local` siguen mostrando una autorización antigua. No usarlas como prueba de que una autorización nueva en el despliegue real haya fallado: comprobar el diagnóstico autenticado del servidor.
+- Se comprobó en Chrome el módulo TN publicado. El intento de consumir la autorización anterior devolvió «Sesión de autorización no encontrada o expirada». Se solicitó renovar únicamente la autorización de la demo tras publicar las correcciones; no volver a cambiar scopes de Partners. El usuario confirmó que el regreso de su última autorización incluía `7570182`.
+
+En Mostrador, completar las variables de `.env.example`:
+
+```dotenv
+CROSS_SELLING_LOGITRACK_URL=https://<dominio-real-de-logitrack>
+CROSS_SELLING_STORE_ID=7570182
+CROSS_SELLING_PUBLISH_KEY=<clave-aleatoria-de-32-o-mas-caracteres>
+```
+
+En el entorno de Logitrack, asignar a la tienda la misma clave:
+
+```dotenv
+CROSS_SELLING_PUBLISH_KEYS={"7570182":"<misma-clave-aleatoria>"}
+```
+
+No usar variables `NEXT_PUBLIC_*`, tokens OAuth ni contraseñas de usuarios como clave de publicación.
+No se generaron claves de publicación entre Mostrador y Logitrack. Sólo se desplegaron las correcciones de conexión, el diagnóstico y la sonda limitada a la demo.
+
+`PUT /api/cross-selling/config?storeId=7570182` recibe `{ snapshot, revision }`; `GET` devuelve sólo estado.
+Ambos requieren `x-mostrador-timestamp` y `x-mostrador-signature`. La firma cubre método, ruta con query, timestamp y hash SHA-256 del cuerpo.
+La recepción admite como máximo 8 MiB. Cada tienda requiere una conexión activa en Logitrack.
+Todas las respuestas mantienen `ready: false`, `enabled: false` y `stage: requires-tiendanube-test` en esta etapa, aunque Mostrador publique la intención de habilitar reglas.
+
+## Comandos de comprobación
+
+Desde Mostrador:
+
+```powershell
+npm test
+npm run build
+node scripts/sync-crossselling-engine.js 'D:\Logística' --check
+```
+
+Desde Logitrack:
+
+```powershell
+npm test
+npm run build
+node --env-file=.env.local scripts/probar-crossselling.mjs --store=7570182 --production --inspect-pending
+```
+
+El diagnóstico es sólo lectura y no imprime tokens. `--production` selecciona las variables `TURSO_*_PROD` del entorno local; no selecciona un proyecto Vercel.
+`--inspect-pending` permite diagnosticar una autorización pendiente sin vincularla ni modificarla.
+
+Al modificar el motor canónico, volver a distribuirlo con `node scripts/sync-crossselling-engine.js 'D:\Logística'`.
+El manifest registra hashes y la prueba de Logitrack verifica la integridad de sus copias. Cada despliegue incluye sus propios archivos; no hay dependencia de rutas locales.
+
+## Trabajo pendiente tras resolver el acceso
+
+1. Acceso y prueba básica resueltos: catálogo/promociones/scripts verificados; aplicación y retirada real comprobadas. No volver a solicitar autorización.
+2. Confirmar autenticación del callback con TN (IP/WAF o firma realmente disponible), tiempo de respuesta de 800 ms y combinación con promociones existentes. No inventar cabeceras de firma.
+3. Probar en un checkout real: aplicación, retirada, cantidades, centavos, transferencia y cupón. TN agrupa medios de pago y cupones en una opción; el evaluador excluye carritos con cupones.
+4. Implementar el callback HTTP, persistencia de carritos/aceptaciones, autenticación de identidad del carrito y aceptación validada en servidor. El evaluador puro existente no sustituye esas interfaces. Publicar y aceptar ofertas requiere una identidad de carrito verificable, no un ID enviado sin validación por el navegador.
+5. Implementar el módulo visual al agregar y en el carrito, selección de variante, refresco de catálogo TN, manejo de información vencida y métricas por canal a partir de pedidos confirmados.
+6. Habilitar una selección piloto en la tienda de prueba. Sólo después extender a PC MIDI y verificar su tema Amazonas por separado.
+
+No hay endpoints comerciales públicos de sugerencias o aceptaciones ni cambios en el tema en esta etapa. Existe un callback exclusivamente de prueba. Tampoco se implementó aún la medición de ventas online o la activación en producción.
+
+## Prueba real de descuentos completada
+
+- Principal: MIDIPLUS AK490, variante `1503397959`, precio $162.985,80.
+- Accesorio: MIDILINK MINI, variante `1503397906`, precio online promocional $30.673,20. Se conservó su descuento de precio previo.
+- Sin aceptación: subtotal y total iguales, sin beneficio de la app.
+- Aceptación administrativa limitada al carrito de prueba: dos accesorios y un principal sumaron $224.332,20; la app aplicó $1 y el carrito y checkout mostraron **$224.331,20**.
+- Al eliminar el principal: el callback recibió la promoción aplicada y respondió `remove_discount`; subtotal y total del accesorio quedaron en **$61.346,40**, sin el beneficio de la app.
+- La promoción `3ad5cdaf-facf-4f1c-a074-9c3f30a56c12` quedó `active:false` y la aceptación `enabled:false` al terminar. No se generó un pedido ni un pago.
+- Evidencia en `docs/evidence/`: demo conectada, carrito sin aceptación, carrito con descuento, checkout con descuento y descuento retirado.
+
+### Resultado técnico y límites
+
+La sonda usa una configuración compacta firmada, vinculada a una única tienda/carrito/pareja de variantes y con vencimiento. El callback evalúa en 0–1 ms sin consultar la base; persiste la evidencia después de responder mediante `after()`. No es la implementación comercial de aceptaciones ni puede ampliarse a todos los carritos cambiando un ID.
+
+La consulta a Turso desde el callback dio entre 475 y 1229 ms, además de la latencia de red de TN. Superó el presupuesto total de 800 ms en pruebas reales. La lectura HTTP directa con límite de 600 ms también venció. No incorporar consultas a esa base al camino crítico del callback comercial sin resolver su latencia.
+
+Falta el módulo de compra, las aceptaciones comerciales verificables, el almacenamiento/evaluación de baja latencia, la medición y la matriz completa de transferencia/cupones/redondeos/pedido. Antes de producción falta confirmar la autenticación de callbacks de TN (IP/WAF o firma oficial), sin inventar cabeceras.
+
+La sonda y sus interfaces están en Logitrack: `/cross-selling-test`, `/api/admin/tiendanube/cross-selling/probe` y `/api/cross-selling/demo-callback/[token]`. El panel requiere administrador del workspace y sólo opera con la demo `7570182`; las rutas no aceptan elegir una tienda de producción.
+
+Despliegue final de mantenimiento: `dpl_2m81wKohyMqjwBMZmNoUiwrYXzkF`, promovido al proyecto correcto `logitrack`, desde el checkout aislado. No incluye las modificaciones pendientes ajenas de logística/finanzas ni activa cross-selling comercial.
+
+Validación: Mostrador 88 tests aprobados y uno omitido por falta de base de pruebas; Logitrack 63 aprobados, checkout aislado 45 aprobados. Lint sin errores (un warning previo en `CarrierPortalClient.js`); las compilaciones desplegadas pasaron.
+
+## Módulo «Completá tu equipo» (demo 7570182, sin desplegar)
+
+Implementado en Logitrack, limitado a LogiTrack Prueba:
+
+- `public/cross-selling/completa-tu-equipo.js`: al disparar `productAddedToCart` muestra hasta 3 accesorios con precio con descuento, ahorro y botón **Agregar con descuento**; también los inserta en el carrito lateral (`.js-ajax-cart-panel`). Al aceptar registra la aceptación, agrega el accesorio con `/comprar/` y abre el carrito para que TN recalcule.
+- `scripts/tiendanube/completa-tu-equipo-loader.js`: archivo para subir en Partners (LogiTrack2, **sin instalación automática**, para no cargarlo en PC MIDI). Sólo carga el script publicado en geomodi.ai si la tienda es 7570182.
+- `GET /api/cross-selling/storefront/offers`: ofertas calculadas con el motor de Mostrador sobre la última publicación. No expone costos. Sólo responde al origen de la demo.
+- `POST /api/cross-selling/storefront/accept`: valida `cart_id` y la línea del principal contra el último carrito que TN envió al callback (no contra el navegador), recalcula la oferta y el margen y actualiza el callback.
+- `POST /api/cross-selling/offer-callback/[token]`: evalúa sin base de datos. Las aceptaciones viajan en la URL firmada (TN admite 255 caracteres), por eso se conservan las 3 más recientes, con vencimiento de 2 horas. El descuento se limita a la cantidad del principal y se retira si cambia el carrito, aparece un cupón o baja el precio.
+- Panel: `/cross-selling-test` → **Completá tu equipo** (activar, desactivar, instalar o quitar el script por su ID). Activar reemplaza el callback de la sonda de $1.
+
+Límite: guardar aceptaciones en la URL sirve para la demo, no para producción. Para producción sigue pendiente un almacenamiento de baja latencia.
+
+Puesta en marcha: clave de publicación en ambos servidores, despliegue en `logitrack` desde un checkout aislado, publicación de reglas desde Mostrador, script en Partners e instalación en la demo.
+
+Estado al 16/10/2026:
+
+- Clave de publicación generada: `CROSS_SELLING_PUBLISH_KEYS` (Production, sensible) en Vercel `logitrack` y las tres variables `CROSS_SELLING_*` en el `.env` de Mostrador. Una consulta firmada de estado respondió 200 (`published:false`).
+- Despliegue `dpl_Bqycxxdp1BmjtvgL4QVtq785efd7` en `www.geomodi.ai`. Para revertir, usar `dpl_2m81wKohyMqjwBMZmNoUiwrYXzkF`. Desde el mismo checkout aislado se agregaron el receptor `/api/cross-selling/config`, el motor y el módulo. No incluye los cambios de logística/finanzas.
+- Comprobación pública: script 200; ofertas sin origen de la demo 403; ofertas con el módulo inactivo 404; callback con firma inválida 404.
+
+Prueba real del 19/10/2026 (módulo activo en el espacio 2, promoción `cd9be1bb-4133-4f95-9719-0c172b10b2ae`, despliegue `dpl_H6V3CpxZ4gv4rWmJnG2Y73Uqng3x`). El script se inyectó en el navegador porque el script 11451 de Partners no tenía una versión activa (`current_version: null`):
+
+- Al agregar el AK490 aparecieron 2 ofertas de las reglas reales de Mostrador: banqueta Meike y Arturia Minifuse 1, ambas con 10%.
+- **Agregar con descuento** registró la aceptación, agregó la banqueta y abrió el carrito: «Completá tu equipo: -$3.625,28», total $195.613,32 sobre $199.238,60.
+- Al quitar el AK490 se retiró el descuento.
+- Script de Partners: v.2 en «Probando (tienda demo)». LogiTrack Prueba es la tienda demo de Partners, así que Tiendanube ya lo carga solo (`apps-scripts.tiendanube.com/logitrack2/complet-tu-equipo/2.js`). No pasarlo a producción mientras el módulo sea sólo para la demo. Despliegue vigente: `dpl_BWknKBAScmMW4LmUDCG8JD79tmue`.
+- Al cargar la página, los ítems de `LS.cart` no traen `cart_id` (sí `LS.cart.id`); el script usa ese valor como alternativa.
+- Correcciones descubiertas: `/comprar/` requiere `X-Requested-With: XMLHttpRequest` para responder JSON, y TN tarda unos segundos en usar el callback actualizado (el script espera 4 s antes de agregar). La lista `/scripts` de TN llega como `{ result, total }` e incluye scripts no asociados a la tienda.
+
+Referencias: [Discount API](https://tiendanube.github.io/api-documentation/v1/resources/discounts), [Scripts](https://tiendanube.github.io/api-documentation/v1/resources/script).

@@ -31,6 +31,11 @@ export const config = {
   },
   // Datos separados por modo: las reglas de prueba no se mezclan con las reales.
   tiendanubeUrl: env.TIENDANUBE_URL || "https://www.pcmidi.com.ar",
+  onlineCrossSelling: {
+    url: (env.CROSS_SELLING_LOGITRACK_URL || "").trim(),
+    key: (env.CROSS_SELLING_PUBLISH_KEY || "").trim(),
+    storeId: (env.CROSS_SELLING_STORE_ID || "").trim(),
+  },
   dataDir: path.join(ROOT, "data", mode),
   // Contraseña compartida para entrar al mostrador. Vacía = sin login (solo para uso en esta computadora).
   claveAcceso: (env.CLAVE_ACCESO || "").trim(),
