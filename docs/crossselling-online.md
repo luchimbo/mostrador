@@ -192,3 +192,10 @@ Falta: conexión de PC MIDI en Logitrack con permisos de descuentos y scripts, c
 - `main` en GitHub con el cross-selling online (`f262da6`), desplegado en Railway con las variables `CROSS_SELLING_*`. Railway publicó sus reglas (10 reglas, 282 productos) y el módulo se activó desde su interruptor (promoción `9a1ad522-…`).
 - Prueba real en `pcmidi.com.ar`, sin comprar: con el teclado MK2083 en el carrito, `/comprar/` mostró «Completá tu equipo» con la funda Meike chica, el soporte tijera y los auriculares, al 10%. Aceptar la funda la agregó y Tiendanube aplicó **-$705,59**. El carrito de prueba quedó vacío.
 - Pendiente: las páginas de producto de PC MIDI salen del caché de Tiendanube anterior a la instalación del script. Hasta que se renueve, la ventana al agregar al carrito no aparece; en el carrito sí.
+
+## Informe por canal (19/10/2026)
+
+- Logitrack (`4719acf`, `dpl_9XVZoQFkxmuCAZXQoQs8KasZUX32`) registra las ofertas mostradas en la tienda (aviso `sendBeacon` por bloque y página; contadores diarios por regla en Redis), cada aceptación (Turso) y los pedidos de las tiendas habilitadas desde el webhook. Atribuye un accesorio al cross-selling cuando el pedido trae el descuento de nuestra promoción, el principal está en el pedido y hubo una aceptación de ese par en las 6 h anteriores.
+- `GET /api/cross-selling/report?storeId&from&to`, firmado igual que la publicación: pedidos y facturado online (pagados y no cancelados), ventas con cross-selling, vendido, descuento otorgado, por regla (mostradas, aceptadas, vendidas, vendido) y por producto.
+- Mostrador: en **Informes**, «Cross-selling por canal» con Mostrador, Tienda online y Total para el período elegido. En **Recomendaciones**, cada regla muestra «Mostrador: …» y «Online: …».
+- Límites: el facturado online cuenta desde que PC MIDI quedó conectada (19/10/2026). Falta confirmar con un pedido real cómo informa Tiendanube `promotional_discount.promotions_applied`; sin ese detalle alcanza con que haya descuento promocional. El Excel sigue siendo sólo del mostrador.

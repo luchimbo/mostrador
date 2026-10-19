@@ -96,10 +96,13 @@ function Informes() {
   const [datos, setDatos] = useState(null);
   const [error, setError] = useState(null);
   const [dia, setDia] = useState(null);
+  const [online, setOnline] = useState(null);
   useEffect(() => {
     setError(null);
     setDia(null);
+    setOnline(null);
     api(`/estadisticas?${new URLSearchParams({ desde, hasta })}`).then(setDatos).catch((err) => setError(err.message));
+    api(`/estadisticas/online?${new URLSearchParams({ desde, hasta })}`).then(setOnline).catch(() => setOnline({ error: "No se pudo consultar la tienda online" }));
   }, [desde, hasta]);
   const maxDia = Math.max(1, ...(datos?.porDia || []).map((d) => d.total));
   const maxProducto = Math.max(1, ...(datos?.productos || []).map((p) => p.total));
@@ -114,7 +117,8 @@ function Informes() {
       <label>Hasta <input type="date" value={hasta} onChange={(e) => setRango([desde, e.target.value])} /></label>
     </div>
     {error && <p className="aviso error">{error}</p>}
-    {!datos ? <p>Cargando…</p> : !datos.ventas ? <p className="vacio">No hay ventas en este período.</p> : <>
+    {datos && <CrossSellingPorCanal local={datos} online={online} />}
+    {!datos ? <p>Cargando…</p> : !datos.ventas ? <p className="vacio">No hay ventas del mostrador en este período.</p> : <>
       <div className="informes-resumen">
         <div><span>Facturado</span><b>{pesos(datos.facturado)}</b></div>
         <div><span>Ventas</span><b>{datos.ventas}</b></div>
@@ -162,6 +166,40 @@ function Informes() {
     </>}
     <InformeExcel desde={desde} hasta={hasta} />
   </section>;
+}
+
+// Cross-selling separado por canal: Mostrador (ventas del local) y Tienda online (pedidos pagados en Tiendanube).
+function CrossSellingPorCanal({ local, online }) {
+  const o = online?.datos;
+  const canales = [
+    { nombre: "Mostrador", ventas: local.ventas, facturado: local.facturado, con: local.conAgregado, vendido: local.agregados },
+    ...(o ? [{ nombre: "Tienda online", ventas: o.orders, facturado: o.total, con: o.ordersWithCrossSelling, vendido: o.crossSellingRevenue }] : []),
+  ];
+  const total = canales.reduce((t, c) => ({ ventas: t.ventas + c.ventas, facturado: t.facturado + c.facturado, con: t.con + c.con, vendido: t.vendido + c.vendido }),
+    { ventas: 0, facturado: 0, con: 0, vendido: 0 });
+  const reglasOnline = o ? Object.values(o.rules || {}) : [];
+  const mostradas = reglasOnline.reduce((n, r) => n + r.shown, 0), aceptadas = reglasOnline.reduce((n, r) => n + r.accepted, 0);
+  return <div className="informes-panel">
+    <h3>Cross-selling por canal</h3>
+    <p className="metrica">Mostrador: ventas del local. Tienda online: pedidos pagados en Tiendanube con productos agregados desde «Completá tu equipo».</p>
+    <table>
+      <thead><tr><th>Canal</th><th className="num">Ventas</th><th className="num">Con cross-selling</th><th className="num">Vendido por cross-selling</th><th className="num">De lo facturado</th></tr></thead>
+      <tbody>
+        {canales.map((c) => <tr key={c.nombre}><td>{c.nombre}</td><td className="num">{c.ventas}</td><td className="num">{c.con} ({pct(c.con, c.ventas)})</td>
+          <td className="num">{pesos(c.vendido)}</td><td className="num">{pct(c.vendido, c.facturado)}</td></tr>)}
+        {o && <tr><td><b>Total</b></td><td className="num"><b>{total.ventas}</b></td><td className="num"><b>{total.con}</b></td>
+          <td className="num"><b>{pesos(total.vendido)}</b></td><td className="num"><b>{pct(total.vendido, total.facturado)}</b></td></tr>}
+      </tbody>
+    </table>
+    {!online ? <p className="metrica">Consultando la tienda online…</p>
+      : online.configurado === false ? <p className="metrica">La tienda online no está conectada en este servidor.</p>
+      : online.error ? <p className="aviso error">Tienda online: {online.error}</p>
+      : <p className="metrica">Tienda online en el período: {mostradas} ofertas mostradas · {aceptadas} aceptadas{mostradas > 0 && ` (${pct(aceptadas, mostradas)})`} · descuento otorgado {pesos(o.crossSellingDiscount)}.</p>}
+    {o?.products?.length > 0 && <table>
+      <thead><tr><th>Producto agregado online</th><th className="num">Pedidos</th><th className="num">Unidades</th><th className="num">Vendido</th></tr></thead>
+      <tbody>{o.products.map((p, i) => <tr key={i}><td>{p.name}</td><td className="num">{p.sales}</td><td className="num">{p.units}</td><td className="num">{pesos(p.revenue)}</td></tr>)}</tbody>
+    </table>}
+  </div>;
 }
 
 function InformeExcel({ desde, hasta }) {
@@ -213,6 +251,7 @@ function SelectorProducto({ productos, onElegir, excluir = [] }) {
 function Reglas({ productos, porId }) {
   const [reglas, setReglas] = useState(null);
   const [metricas, setMetricas] = useState(null);
+  const [metricasOnline, setMetricasOnline] = useState(null);
   const [guardado, setGuardado] = useState(true);
   const rubros = useMemo(() => [...new Set(productos.map((p) => p.rubro))].sort(), [productos]);
   const subrubros = useMemo(() => [...new Set(productos.map((p) => p.subrubro).filter(Boolean))].sort(), [productos]);
@@ -220,6 +259,7 @@ function Reglas({ productos, porId }) {
   useEffect(() => {
     api("/reglas").then(setReglas);
     api("/metricas").then(setMetricas);
+    api("/metricas/online").then((r) => setMetricasOnline(r.datos?.rules || null)).catch(() => {});
   }, []);
 
   function cambiar(id, cambios) {
@@ -368,10 +408,17 @@ function Reglas({ productos, porId }) {
             </label>
             {m && (
               <p className="metrica">
-                Mostrada {m.mostradas} veces · aceptada {m.aceptadas}
+                Mostrador: mostrada {m.mostradas} veces · aceptada {m.aceptadas}
                 {m.mostradas > 0 && ` (${Math.round((m.aceptadas / m.mostradas) * 100)}%)`} · vendido {pesos(m.ingresos)}
               </p>
             )}
+            {metricasOnline && (() => {
+              const o = metricasOnline[String(r.id)] || { shown: 0, accepted: 0, sold: 0, revenue: 0 };
+              return <p className="metrica">
+                Online: mostrada {o.shown} veces · aceptada {o.accepted}
+                {o.shown > 0 && ` (${Math.round((o.accepted / o.shown) * 100)}%)`} · vendida {o.sold} · vendido {pesos(o.revenue)}
+              </p>;
+            })()}
           </div>
         );
       })}

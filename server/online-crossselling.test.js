@@ -179,3 +179,12 @@ test("módulo de la tienda: muestra el error de Logitrack y rechaza confirmacion
   const missing = createOnlinePublisher({ connection: {}, read: () => ({}), write: async () => {}, source: () => ({}) });
   await assert.rejects(missing.setModule(true), /Configurá la conexión/);
 });
+test("informe online: pide el período firmado a Logitrack y valida las fechas", async () => {
+  let pedido;
+  const pub = publisher(async (url) => { pedido = new URL(url); return { ok: true, json: async () => ({ orders: 2, crossSellingRevenue: 100 }) }; });
+  assert.deepEqual(await pub.report("2026-10-01", "2026-10-19"), { orders: 2, crossSellingRevenue: 100 });
+  assert.equal(pedido.pathname, "/api/cross-selling/report");
+  assert.equal(pedido.searchParams.get("from"), "2026-10-01");
+  assert.equal(pedido.searchParams.get("storeId"), "7570182");
+  await assert.rejects(pub.report("ayer", "hoy"), /Período inválido/);
+});

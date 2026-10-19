@@ -12,11 +12,12 @@ export function createOnlinePublisher({ connection, read, write, source, fetchIm
     const s = state();
     return { ...s, configured, storeId: connection.storeId || null };
   }
-  async function request(method, body = "", endpoint = "/api/cross-selling/config") {
+  async function request(method, body = "", endpoint = "/api/cross-selling/config", params = {}) {
     const base = new URL(connection.url);
     if (base.protocol !== "https:" && !(base.protocol === "http:" && ["localhost", "127.0.0.1"].includes(base.hostname))) throw new Error("Logitrack debe usar HTTPS");
     const url = new URL(endpoint, base);
     url.searchParams.set("storeId", connection.storeId);
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
     const path = url.pathname + url.search, timestamp = String(now().getTime());
     const response = await fetchImpl(url, { method, body: method === "GET" ? undefined : body, redirect: "error", signal: AbortSignal.timeout(method === "PUT" ? 90_000 : 20_000),
       headers: { "Content-Type": "application/json", "x-mostrador-timestamp": timestamp,
@@ -78,5 +79,11 @@ export function createOnlinePublisher({ connection, read, write, source, fetchIm
     await write(DOCUMENT, { ...state(), module });
     return status();
   }
-  return { status, publish, schedule, remoteStatus, moduleStatus, setModule };
+  // Informe online del período (días de Argentina, inclusive). Sin conexión: null.
+  async function report(from, to) {
+    if (!configured) return null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from || "") || !/^\d{4}-\d{2}-\d{2}$/.test(to || "")) throw new Error("Período inválido");
+    return request("GET", "", "/api/cross-selling/report", { from, to });
+  }
+  return { status, publish, schedule, remoteStatus, moduleStatus, setModule, report };
 }

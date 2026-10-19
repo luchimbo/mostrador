@@ -449,6 +449,17 @@ const inicioDiaAR = (fecha, dias = 0) => {
   return d.toISOString();
 };
 
+// Cross-selling de la tienda online (Logitrack). Si falla, el informe local sigue funcionando.
+const hoyAR = () => new Date(Date.now() - 3 * 60 * 60_000).toISOString().slice(0, 10);
+app.get("/api/estadisticas/online", async (req, res) => {
+  try { res.json({ configurado: onlinePublisher.status().configured, datos: await onlinePublisher.report(req.query.desde, req.query.hasta) }); }
+  catch (err) { res.json({ configurado: true, error: err.message, datos: null }); }
+});
+app.get("/api/metricas/online", async (_req, res) => {
+  try { res.json({ datos: await onlinePublisher.report("2026-01-01", hoyAR()) }); }
+  catch (err) { res.json({ error: err.message, datos: null }); }
+});
+
 app.get("/api/estadisticas", async (req, res) => {
   const { desde, hasta } = req.query;
   const ventas = sinProductosPrueba((await readLog("ventas.jsonl")).filter((v) => !v.prueba || config.facturacionSimulada), config.productosPruebaIds);
