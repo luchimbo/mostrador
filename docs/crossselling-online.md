@@ -164,7 +164,7 @@ Recomendación:
 Implementado el 19/10/2026 (Logitrack `97fd8ee`, despliegue `dpl_G39XBkTdyWaLYve3WvKKJQPL5Ba3`):
 - Upstash Redis conectado a `logitrack` (`KV_REST_API_*`). URL del callback fija y aceptaciones en Redis.
 - Prueba real: aceptar la banqueta con el AK490 aplicó «Completá tu equipo: -$3.625,28» unos 2,9 s después del clic, sin la espera de propagación. Al quitar el AK490 se retiró. Sin Redis, el código vuelve solo al modo URL.
-- Pendiente: lista de IPs de TN en el Firewall de Vercel (pedidas a soporte de Partners).
+- Lista de IPs de TN en el Firewall de Vercel: **postergada por decisión del usuario (19/10/2026)**, para priorizar que quede funcional. Protección actual: URL secreta firmada y validación contra el carrito real de TN. Retomarla antes o después del piloto en PC MIDI, pidiendo las IPs a soporte de Partners.
 
 3. Riesgo residual mientras tanto: con la URL secreta se podría enviar un carrito falso al callback. No aplica descuentos (sólo TN los aplica), pero podría ensuciar los eventos que validan aceptaciones. La lista de IPs lo cierra.
 
