@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { api, buscar, pesos } from "./lib.js";
 import PantallaReposo from "./PantallaReposo.jsx";
 import OnlineCrossSelling from "./OnlineCrossSelling.jsx";
-import { coincideNombre } from "../shared/reglas.js";
+import { reglaSeDispara } from "../shared/recommendations.js";
 
-const coincideDisparador = (regla, p) => !regla.sugeridos.map(String).includes(String(p.id)) && coincideNombre(regla.disparador, p);
+const coincideDisparador = (regla, p, porId) => reglaSeDispara(
+  { ...regla, activa: true }, [{ productId: p.id }], porId,
+) !== null;
 
 export default function Admin() {
   const [tab, setTab] = useState("reglas");
@@ -299,6 +301,8 @@ function Reglas({ productos, porId }) {
       </p>
       {reglas.map((r) => {
         const m = metricaDe(r.id);
+        const coincidencias = r.disparador.valor
+          ? productos.filter((p) => coincideDisparador(r, p, porId)) : [];
         return (
           <div key={r.id} className={`regla ${r.activa ? "" : "inactiva"}`}>
             <div className="fila">
@@ -343,9 +347,6 @@ function Reglas({ productos, porId }) {
                     value={r.disparador.excluir || ""}
                     onChange={(e) => cambiar(r.id, { disparador: { ...r.disparador, excluir: e.target.value } })}
                   />
-                  <span className="metrica">
-                    {productos.filter((p) => coincideDisparador(r, p)).length} productos coinciden
-                  </span>
                 </>
               ) : r.disparador.tipo === "rubro" || r.disparador.tipo === "subrubro" ? (
                 <select
@@ -372,6 +373,12 @@ function Reglas({ productos, porId }) {
                 />
               )}
             </div>
+            {r.disparador.valor && <details className="metrica">
+              <summary>{coincidencias.length} productos coinciden con el disparador</summary>
+              {coincidencias.length > 0
+                ? <ul>{coincidencias.map((p) => <li key={p.id}>{p.nombre}</li>)}</ul>
+                : <p>Revisá el disparador: ningún producto del catálogo coincide.</p>}
+            </details>}
             <div className="fila">
               <span>sugerir con</span>
               <input
