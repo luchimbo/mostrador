@@ -40,7 +40,7 @@ export default function Admin() {
       {tab === "reglas" && <Reglas productos={productos} porId={porId} />}
       {tab === "destacados" && <PantallaReposo productos={productos} porId={porId} SelectorProducto={SelectorProducto}><Destacados productos={productos} porId={porId} /></PantallaReposo>}
       {tab === "tienda" && <Tienda productos={productos} onActualizado={cargarCatalogo} />}
-      {tab === "crossselling-online" && <OnlineCrossSelling />}
+      {tab === "crossselling-online" && <OnlineCrossSelling productos={productos} />}
       {tab === "ajustes" && <Ajustes />}
       {tab === "facturas" && <FacturasEmitidas />}
       {tab === "informes" && <Informes />}
