@@ -32,6 +32,17 @@ s { color: var(--gris); margin-right: 6px; font-weight: 400; }
 .pago-manual label { display: grid; gap: 4px; }
 .pago-manual input, .pago-manual select { width: 100%; min-width: 0; }
 .historial-facturas { overflow-x: auto; margin-top: 16px; }
+.excluidos-online { margin-top: 12px; padding: 16px; background: #fff; border: 1px solid var(--borde); border-radius: 8px; }
+.excluidos-online summary { cursor: pointer; font-weight: 600; }
+.buscar-excluidos-online { display: grid; gap: 6px; max-width: 460px; }
+.buscar-excluidos-online input { min-width: 0; width: 100%; }
+.tabla-excluidos-online { overflow: auto; max-height: 440px; border: 1px solid var(--borde); border-radius: 8px; }
+.tabla-excluidos-online table { width: 100%; border-collapse: collapse; text-align: left; }
+.tabla-excluidos-online th, .tabla-excluidos-online td { padding: 10px 12px; border-bottom: 1px solid var(--borde); vertical-align: top; }
+.tabla-excluidos-online th { position: sticky; top: 0; background: var(--fondo); }
+.tabla-excluidos-online td:first-child { white-space: nowrap; }
+.tabla-excluidos-online td:nth-child(2) { min-width: 200px; }
+.nota-excluidos-online { color: var(--gris); font-size: 0.9em; }
 .informe-excel { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-top: 16px; padding: 16px; background: #fff; border: 1px solid var(--borde); border-radius: 8px; }
 .informe-excel h3, .informe-excel p { flex-basis: 100%; margin: 0; }
 .informe-excel p { color: var(--gris); font-size: 0.9em; }

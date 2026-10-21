@@ -1,12 +1,29 @@
-import { useEffect, useState } from "react";
-import { api } from "./lib.js";
+import { useEffect, useMemo, useState } from "react";
+import { api, buscar } from "./lib.js";
 
-export default function OnlineCrossSelling() {
+export default function OnlineCrossSelling({ productos }) {
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [moduleError, setModuleError] = useState("");
+  const [busqueda, setBusqueda] = useState("");
+  const excluidos = useMemo(() => {
+    const nombres = new Map();
+    for (const p of productos) {
+      const codigo = String(p.codigo || "").trim().toUpperCase();
+      if (!codigo || !p.nombre) continue;
+      const existentes = nombres.get(codigo) || new Set();
+      existentes.add(p.nombre);
+      nombres.set(codigo, existentes);
+    }
+    return (status?.remote?.excluded || []).map((p) => ({
+      codigo: p.sku,
+      nombre: [...(nombres.get(String(p.sku).trim().toUpperCase()) || [])].join(" / "),
+      motivo: p.reason,
+    }));
+  }, [productos, status?.remote?.excluded]);
+  const visibles = buscar(excluidos, busqueda);
   useEffect(() => {
     let mounted = true;
     api("/crossselling-online").then((state) => {
@@ -74,7 +91,27 @@ export default function OnlineCrossSelling() {
         <button disabled={busy || !status.configured} onClick={() => act("publish")}>{busy ? "Procesando…" : "Publicar ahora"}</button>
         <button disabled={busy || !status.configured} onClick={() => act("status")}>Consultar estado en Logitrack</button>
       </div>
-      {status.remote?.mappedProducts != null && <p>{status.remote.mappedProducts} productos vinculados por SKU. {status.remote.excluded?.length || 0} sin correspondencia válida.</p>}
+      {status.remote?.mappedProducts != null && <>
+        <p>{status.remote.mappedProducts} productos vinculados por SKU. {excluidos.length} excluidos de las recomendaciones online.</p>
+        {excluidos.length > 0 && <details className="excluidos-online">
+          <summary>Ver {excluidos.length} productos excluidos</summary>
+          <p>El detalle corresponde a la última publicación. Un producto puede quedar excluido por su SKU, publicación, precio o stock.</p>
+          <label className="buscar-excluidos-online">
+            Buscar por nombre o SKU
+            <input type="search" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Nombre o SKU del producto" />
+          </label>
+          <p role="status">Mostrando {visibles.length} de {excluidos.length} productos</p>
+          {visibles.length === 0 ? <p>No hay productos que coincidan con la búsqueda.</p> : <div className="tabla-excluidos-online" role="region" aria-label="Productos excluidos de las recomendaciones online" tabIndex={0}>
+            <table>
+              <thead><tr><th scope="col">SKU</th><th scope="col">Producto</th><th scope="col">Motivo de exclusión</th></tr></thead>
+              <tbody>{visibles.map((p) => <tr key={p.codigo}>
+                <td>{p.codigo}</td><td>{p.nombre || "Nombre no disponible en el catálogo actual"}</td><td>{p.motivo}</td>
+              </tr>)}</tbody>
+            </table>
+          </div>}
+          <p className="nota-excluidos-online">«No publicado, sin precio o sin stock» agrupa esas tres causas; el diagnóstico actual no las distingue.</p>
+        </details>}
+      </>}
     </>}
   </section>;
 }
