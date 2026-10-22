@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { api, buscar } from "./lib.js";
+import { useEffect, useRef, useState } from "react";
+import { api } from "./lib.js";
 
 const ORIGENES = { mercadolibre: "MercadoLibre", google: "Google", cliente: "Cliente de PC MIDI" };
 const ESTADOS = { pendiente: "Pendiente", publicada: "Publicada", oculta: "Oculta" };
@@ -15,9 +15,19 @@ export default function ReviewsOnline({ productos }) {
   const [busqueda, setBusqueda] = useState("");
   const [form, setForm] = useState(vacia);
   const [preview, setPreview] = useState(null);
-  const nombres = useMemo(() => new Map(productos.map((p) => [String(p.codigo || "").trim().toUpperCase(), p.nombre])), [productos]);
-  const cargar = () => api("/resenas").then(setData).catch((e) => setError(e.message));
-  useEffect(() => { cargar(); }, []);
+  // Son miles de opiniones: el servidor filtra y manda sólo la primera tanda.
+  const consulta = `/resenas?estado=${filtro === "todas" ? "" : filtro}&q=${encodeURIComponent(busqueda.trim())}&limit=100`;
+  const consultaRef = useRef(consulta);
+  consultaRef.current = consulta;
+  const cargar = () => api(consultaRef.current).then(setData).catch((e) => setError(e.message));
+  useEffect(() => { const t = setTimeout(cargar, busqueda ? 300 : 0); return () => clearTimeout(t); }, [consulta]);
+  // La búsqueda en MercadoLibre corre en el servidor: se consulta el avance hasta que termina.
+  const importando = Boolean(data?.importando);
+  useEffect(() => {
+    if (!importando) return undefined;
+    const t = setInterval(cargar, 5000);
+    return () => clearInterval(t);
+  }, [importando]);
 
   async function run(fn, okMessage) {
     setBusy(true); setError(""); setMessage("");
@@ -46,12 +56,9 @@ export default function ReviewsOnline({ productos }) {
     setMessage(`Se cargaron ${r.importadas} opiniones como pendientes${r.repetidas ? ` (${r.repetidas} repetidas, omitidas)` : ""}.`);
   });
 
-  const visibles = useMemo(() => {
-    const porEstado = (data?.reviews || []).filter((r) => filtro === "todas" || r.estado === filtro);
-    const q = busqueda.trim();
-    if (!q) return porEstado;
-    return buscar(porEstado.map((r) => ({ ...r, codigo: r.sku, nombre: `${nombres.get(r.sku) || ""} ${r.autor} ${r.texto}`, rubro: "" })), q);
-  }, [data, filtro, busqueda, nombres]);
+  const visibles = data?.reviews || [];
+  const aprobarPendientes = () => confirm(`¿Aprobar las ${data.pendientes} opiniones pendientes (las de CSV o carga manual)? Quedan listas para publicar.`) &&
+    run(async () => { const r = await api("/resenas/aprobar-pendientes", { method: "POST", body: {} }); setMessage(`Se aprobaron ${r.aprobadas} opiniones. Falta «Publicar ahora».`); });
 
   return <section>
     <h2>Reseñas en la tienda online</h2>
@@ -71,22 +78,22 @@ export default function ReviewsOnline({ productos }) {
       </div>
       <div className="acciones">
         <button disabled={busy || !data.configured} onClick={() => run(() => api("/resenas/publicar", { method: "POST" }), "Reseñas publicadas en la tienda online.")}>{busy ? "Procesando…" : "Publicar ahora"}</button>
-        <button disabled={busy || !data.configured} onClick={() => run(async () => {
-          const r = await api("/resenas/mercadolibre", { method: "POST" });
-          setMessage(`MercadoLibre: ${r.imported} opiniones nuevas como pendientes (${r.found} encontradas).`);
-        })}>Buscar en MercadoLibre</button>
+        <button disabled={busy || importando || !data.configured} onClick={() => run(() => api("/resenas/mercadolibre", { method: "POST" }), "Búsqueda en MercadoLibre iniciada.")}>
+          {importando ? "Buscando en MercadoLibre…" : "Buscar en MercadoLibre"}</button>
+        {data.pendientes > 0 && <button disabled={busy} onClick={aprobarPendientes}>Aprobar las {data.pendientes} pendientes</button>}
         <label className="boton-archivo">Importar CSV
           <input type="file" accept=".csv,text/csv" onChange={elegirArchivo} disabled={busy} hidden />
         </label>
       </div>
       {data.meli && <p className="nota-resenas">
-        <b>MercadoLibre</b> (se busca solo una vez por día; las nuevas entran como pendientes): última búsqueda {new Date(data.meli.at).toLocaleString("es-AR")}.
+        <b>MercadoLibre</b> (se busca solo una vez por día; las nuevas entran ya aprobadas y, con el módulo activo, salen a la tienda solas): última búsqueda {new Date(data.meli.at).toLocaleString("es-AR")}.
         {data.meli.error ? ` Error: ${data.meli.error}` : ` ${data.meli.items} publicaciones revisadas, ${data.meli.found} opiniones con texto, ${data.meli.imported} nuevas, ${data.meli.repeated} ya cargadas.`}
         {data.meli.partial && ` Quedó incompleta: ${data.meli.partial}`}
         {data.meli.errors > 0 && data.meli.firstError && ` Primer error de MercadoLibre: ${data.meli.firstError}`}
         {!data.meli.error && (data.meli.withoutSku > 0 || data.meli.unknownSku > 0 || data.meli.withoutText > 0 || data.meli.errors > 0) && ` Omitidas: ${data.meli.withoutSku} publicaciones sin SKU, ${data.meli.unknownSku} con SKU que no está en el catálogo, ${data.meli.withoutText} calificaciones sin texto, ${data.meli.errors} publicaciones con error.`}
       </p>}
-      <p className="nota-resenas">Columnas del CSV: sku, rating (1 a 5), autor, texto, fecha (AAAA-MM-DD), origen (mercadolibre, google o cliente) y link (opcional). Se cargan como pendientes y no se muestran hasta que las aprobés y publiques.</p>
+      {importando && <p className="aviso pendiente" role="status">Buscando opiniones en MercadoLibre. Tarda varios minutos (hasta unos 15); podés seguir usando Mostrador y esta pantalla se actualiza sola.</p>}
+      <p className="nota-resenas">Columnas del CSV: sku, rating (1 a 5), autor, texto, fecha (AAAA-MM-DD), origen (mercadolibre, google o cliente) y link (opcional). Se cargan como pendientes y no se muestran hasta que las apruebes y publiques.</p>
 
       {preview && <div className="aviso pendiente" role="status">
         <b>Vista previa:</b> {preview.importables} opiniones se pueden importar{preview.totalErrores > 0 && `, ${preview.totalErrores} filas con errores`}.
@@ -118,12 +125,12 @@ export default function ReviewsOnline({ productos }) {
           <option value="todas">Todas</option>{Object.entries(ESTADOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
         <label>Buscar<input type="search" value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="SKU, producto, autor o texto" /></label>
       </div>
-      <p role="status">Mostrando {visibles.length} de {data.total}</p>
+      <p role="status">Mostrando {visibles.length} de {data.coinciden}{data.coinciden > visibles.length && " (afiná el filtro o la búsqueda para ver el resto)"}</p>
       {visibles.length > 0 && <div className="tabla-excluidos-online" role="region" aria-label="Reseñas cargadas" tabIndex={0}>
         <table>
           <thead><tr><th scope="col">Producto</th><th scope="col">★</th><th scope="col">Opinión</th><th scope="col">Origen</th><th scope="col">Estado</th><th scope="col">Acciones</th></tr></thead>
           <tbody>{visibles.map((r) => <tr key={r.id}>
-            <td>{r.sku}<br /><small>{nombres.get(r.sku) || "Fuera del catálogo actual"}</small></td>
+            <td>{r.sku}<br /><small>{r.producto || "Fuera del catálogo actual"}</small></td>
             <td>{r.rating}</td>
             <td><b>{r.autor}</b> · {r.fecha}<br />{r.texto}</td>
             <td>{r.enlace ? <a href={r.enlace} target="_blank" rel="noreferrer">{ORIGENES[r.origen]}</a> : ORIGENES[r.origen]}</td>

@@ -23,9 +23,15 @@ export function createReviewsPublisher({ connection, read, write, knownSkus = ()
     const published = reviews.filter((r) => r.estado === "publicada");
     return { ...rest, configured, storeId: connection.storeId || null, total: reviews.length,
       pendientes: reviews.filter((r) => r.estado === "pendiente").length, publicadas: published.length,
-      productos: new Set(published.map((r) => r.sku)).size };
+      productos: new Set(published.map((r) => r.sku)).size, importando: Boolean(importing) };
   }
   const list = () => state().reviews;
+  // Aprueba en bloque lo pendiente (opcionalmente sólo de un origen).
+  const approvePending = (origen) => mutate((all) => {
+    let changed = 0;
+    const reviews = all.map((r) => (r.estado === "pendiente" && (!origen || r.origen === origen) ? (changed++, { ...r, estado: "publicada" }) : r));
+    return { reviews, result: changed };
+  });
   async function request(method, body = "", endpoint = "/api/reviews/config", timeout = 30_000) {
     const base = new URL(connection.url);
     if (base.protocol !== "https:" && !(base.protocol === "http:" && ["localhost", "127.0.0.1"].includes(base.hostname))) throw new Error("Logitrack debe usar HTTPS");
@@ -63,10 +69,13 @@ export function createReviewsPublisher({ connection, read, write, knownSkus = ()
     await save({ enabled });
     return publish();
   }
-  // Opiniones de Mercado Libre: Logitrack las lee con la cuenta vinculada; acá entran como «pendiente» para revisarlas.
+  // Opiniones de Mercado Libre: Logitrack las lee con la cuenta vinculada y entran ya aprobadas
+  // (Mercado Libre las modera y sólo se traen las publicadas allá).
   let importing = null;
   function importMeli() {
-    return importing ||= (async () => {
+    if (importing) return importing;
+    // El `finally` corre después de asignar: una falla inmediata no deja la búsqueda marcada como en curso.
+    importing = (async () => {
       if (!configured) throw new Error("Configurá la conexión con Logitrack en el servidor");
       try {
         // Logitrack lee de a tandas de publicaciones (y de a una cuenta de Mercado Libre) por el límite de pedidos de ML.
@@ -97,7 +106,7 @@ export function createReviewsPublisher({ connection, read, write, knownSkus = ()
           const keys = new Set(all.map(reviewKey)), added = [];
           for (const raw of data.reviews) {
             let review;
-            try { review = normalizeReview({ ...raw, autor: "Comprador de MercadoLibre", origen: "mercadolibre", estado: "pendiente" }); }
+            try { review = normalizeReview({ ...raw, autor: "Comprador de MercadoLibre", origen: "mercadolibre", estado: "publicada" }); }
             catch { summary.invalid++; continue; }
             if (known && !known.has(review.sku)) { summary.unknownSku++; continue; }
             const ext = `${review.externalId}|${review.sku}`;
@@ -109,12 +118,17 @@ export function createReviewsPublisher({ connection, read, write, knownSkus = ()
           return { reviews: [...added, ...all], result: null };
         });
         await save({ meli: summary });
+        // Con el módulo activo, lo nuevo sale a la tienda sin otro paso.
+        if (summary.imported > 0 && state().enabled) publish().catch(() => {});
         return summary;
       } catch (err) {
         await save({ meli: { ...(state().meli || {}), at: now().toISOString(), error: err.message } });
         throw err;
-      } finally { importing = null; }
-    })();
+      }
+    })().finally(() => { importing = null; });
+    return importing;
   }
-  return { status, list, mutate, publish, setEnabled, importMeli, remoteStatus: () => configured ? request("GET") : null };
+  // Lo usa el botón: la búsqueda tarda minutos, así que corre aparte y la pantalla consulta el avance.
+  function startImportMeli() { if (!importing) importMeli().catch(() => {}); return Boolean(importing); }
+  return { status, list, mutate, approvePending, publish, setEnabled, importMeli, startImportMeli, remoteStatus: () => configured ? request("GET") : null };
 }

@@ -46,7 +46,7 @@ test("el snapshot publica sólo las reseñas aprobadas, con promedio y la más n
   assert.equal(snap.products.A1.avg, 4.5);
   assert.equal(snap.products.A1.reviews[0].fecha, "2026-05-01");
   assert.equal(JSON.stringify(snap).includes("estado"), false);
-  assert.throws(() => validateReviewsSnapshot({ ...snap, products: { A1: { ...snap.products.A1, count: 9 } } }), /inválidas/);
+  assert.throws(() => validateReviewsSnapshot({ ...snap, products: { A1: { ...snap.products.A1, count: 1 } } }), /inválidas/);
 });
 
 test("el publicador firma la publicación y lleva el interruptor dentro del snapshot", async () => {
@@ -80,7 +80,7 @@ test("si Logitrack no confirma la versión, queda el error y no se marca como pu
   assert.equal(publisher.status().lastPublishedAt, null);
 });
 
-test("importa las opiniones de Mercado Libre como pendientes, sin repetir ni aceptar SKU ajenos", async () => {
+test("importa las opiniones de Mercado Libre ya aprobadas, sin repetir ni aceptar SKU ajenos", async () => {
   let doc = { reviews: [] };
   const meli = { items: 3, withoutSkuCount: 1, withoutText: 2, withoutReviews: 0, errors: 0, reviews: [
     { externalId: "ml:1", sku: "ZTO115", rating: 5, texto: "Excelente producto", fecha: "2026-09-10", enlace: "https://articulo.mercadolibre.com.ar/MLA1" },
@@ -94,7 +94,7 @@ test("importa las opiniones de Mercado Libre como pendientes, sin repetir ni ace
   assert.deepEqual([first.imported, first.unknownSku, first.invalid, first.repeated], [1, 1, 1, 0]);
   assert.match(urls[0], /\/api\/reviews\/meli\?part=0&offset=0&limit=150&storeId=78394$/);
   const [saved] = publisher.list();
-  assert.deepEqual([saved.estado, saved.autor, saved.origen, saved.externalId], ["pendiente", "Comprador de MercadoLibre", "mercadolibre", "ml:1"]);
+  assert.deepEqual([saved.estado, saved.autor, saved.origen, saved.externalId], ["publicada", "Comprador de MercadoLibre", "mercadolibre", "ml:1"]);
   const second = await publisher.importMeli();
   assert.deepEqual([second.imported, second.repeated], [0, 1]);
   assert.equal(publisher.list().length, 1);
@@ -128,4 +128,23 @@ test("Mercado Libre se lee por tandas y por cuenta, y si se corta se conserva lo
   assert.deepEqual([summary.imported, summary.items, summary.errors, summary.firstError], [2, 3, 1, "too many requests"]);
   assert.match(summary.partial, /Mercado Libre caído/);
   assert.equal(publisher.list().length, 2);
+});
+
+test("la publicación manda las más nuevas de cada producto pero el promedio y el total cuentan todas", () => {
+  const many = Array.from({ length: 40 }, (_, i) => ({ ...normalizeReview({ sku: "A1", rating: i < 30 ? 5 : 1, autor: "Comprador de MercadoLibre",
+    texto: `Opinión número ${i}`, fecha: `2026-${String((i % 9) + 1).padStart(2, "0")}-${String((i % 27) + 1).padStart(2, "0")}`, origen: "mercadolibre" }, { today }), estado: "publicada" }));
+  const p = buildReviewsSnapshot({ storeId: "78394", reviews: many, enabled: true }).products.A1;
+  assert.deepEqual([p.count, p.reviews.length, p.avg], [40, 25, 4.0]);
+  assert.ok(p.reviews.every((r, i, a) => i === 0 || a[i - 1].fecha >= r.fecha));
+});
+
+test("aprueba en bloque sólo lo pendiente y la búsqueda de Mercado Libre se puede iniciar sin esperar", async () => {
+  let doc = { reviews: ["pendiente", "pendiente", "oculta", "publicada"].map((estado, i) => ({ id: String(i), sku: "A", origen: i === 0 ? "google" : "cliente", estado })) };
+  const publisher = createReviewsPublisher({ connection: { url: "https://logitrack.test", key: "k".repeat(40), storeId: "78394" },
+    read: (_n, f) => doc ?? f, write: async (_n, v) => { doc = v; }, fetchImpl: async () => new Promise(() => {}) });
+  assert.equal(await publisher.approvePending("google"), 1);
+  assert.equal(await publisher.approvePending(), 1);
+  assert.deepEqual(publisher.list().map((r) => r.estado), ["publicada", "publicada", "oculta", "publicada"]);
+  assert.equal(publisher.startImportMeli(), true);
+  assert.equal(publisher.status().importando, true);
 });

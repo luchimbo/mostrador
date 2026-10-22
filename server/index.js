@@ -380,7 +380,17 @@ app.put("/api/crossselling-online/modulo", async (req, res) => {
 // Reseñas de productos para la tienda online (se cargan acá, se publican a Logitrack).
 const codigosCatalogo = () => new Set([...productsById.values()].map((p) => String(p.codigo || "").trim().toUpperCase()));
 const reseniaError = (res, err) => res.status(400).json({ error: err.message });
-app.get("/api/resenas", (_req, res) => res.json({ ...reviewsPublisher.status(), reviews: reviewsPublisher.list() }));
+// Hay miles de opiniones: la lista se filtra en el servidor y devuelve sólo la primera tanda.
+const sinTildes = (v) => String(v || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+app.get("/api/resenas", (req, res) => {
+  const estado = String(req.query.estado || ""), tokens = sinTildes(req.query.q).split(/s+/).filter(Boolean);
+  const limite = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
+  const nombres = new Map([...productsById.values()].map((p) => [String(p.codigo || "").trim().toUpperCase(), p.nombre]));
+  const coinciden = reviewsPublisher.list().filter((r) => (!estado || r.estado === estado) &&
+    (!tokens.length || tokens.every((t) => sinTildes(`${r.sku} ${nombres.get(r.sku) || ""} ${r.autor} ${r.texto}`).includes(t))));
+  res.json({ ...reviewsPublisher.status(), coinciden: coinciden.length,
+    reviews: coinciden.slice(0, limite).map((r) => ({ ...r, producto: nombres.get(r.sku) || "" })) });
+});
 app.post("/api/resenas", async (req, res) => {
   try {
     const review = { ...normalizeReview(req.body || {}), id: crypto.randomUUID() };
@@ -434,9 +444,15 @@ app.post("/api/resenas/importar", async (req, res) => {
       errores: errors.slice(0, 50), totalErrores: errors.length });
   } catch (err) { reseniaError(res, err); }
 });
-app.post("/api/resenas/mercadolibre", async (_req, res) => {
-  try { res.json(await reviewsPublisher.importMeli()); }
-  catch (err) { res.status(502).json({ error: err.message }); }
+// La búsqueda tarda minutos: arranca en segundo plano y la pantalla consulta el avance en GET /api/resenas.
+app.post("/api/resenas/mercadolibre", (_req, res) => {
+  if (!reviewsPublisher.status().configured) return res.status(502).json({ error: "Configurá la conexión con Logitrack en el servidor" });
+  reviewsPublisher.startImportMeli();
+  res.status(202).json({ importando: true });
+});
+app.post("/api/resenas/aprobar-pendientes", async (req, res) => {
+  try { res.json({ aprobadas: await reviewsPublisher.approvePending(typeof req.body?.origen === "string" ? req.body.origen : undefined) }); }
+  catch (err) { reseniaError(res, err); }
 });
 app.post("/api/resenas/publicar", async (_req, res) => {
   try { res.json(await reviewsPublisher.publish()); }
