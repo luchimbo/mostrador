@@ -402,6 +402,12 @@ app.post("/api/resenas", async (req, res) => {
     res.status(201).json(review);
   } catch (err) { reseniaError(res, err); }
 });
+// Va antes que /:id: si no, «modulo» se tomaría como el id de una opinión.
+app.put("/api/resenas/modulo", async (req, res) => {
+  if (typeof req.body?.enabled !== "boolean") return res.status(400).json({ error: "Indicá enabled: true o false." });
+  try { res.json(await reviewsPublisher.setEnabled(req.body.enabled)); }
+  catch (err) { res.status(502).json({ error: err.message }); }
+});
 app.put("/api/resenas/:id", async (req, res) => {
   try {
     const updated = await reviewsPublisher.mutate((all) => {
@@ -460,11 +466,6 @@ app.post("/api/resenas/publicar", async (_req, res) => {
 });
 app.post("/api/resenas/estado", async (_req, res) => {
   try { res.json({ ...reviewsPublisher.status(), remote: await reviewsPublisher.remoteStatus() }); }
-  catch (err) { res.status(502).json({ error: err.message }); }
-});
-app.put("/api/resenas/modulo", async (req, res) => {
-  if (typeof req.body?.enabled !== "boolean") return res.status(400).json({ error: "Indicá enabled: true o false." });
-  try { res.json(await reviewsPublisher.setEnabled(req.body.enabled)); }
   catch (err) { res.status(502).json({ error: err.message }); }
 });
 app.put("/api/reglas", async (req, res) => {
