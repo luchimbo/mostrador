@@ -69,10 +69,29 @@ export function createReviewsPublisher({ connection, read, write, knownSkus = ()
     return importing ||= (async () => {
       if (!configured) throw new Error("Configurá la conexión con Logitrack en el servidor");
       try {
-        const data = await request("GET", "", "/api/reviews/meli", 290_000);
+        // Logitrack lee de a tandas de publicaciones (y de a una cuenta de Mercado Libre) por el límite de pedidos de ML.
+        const data = { items: 0, withoutSkuCount: 0, withoutText: 0, withoutReviews: 0, errors: 0, firstError: "", reviews: [] };
+        let accounts = 1, stopped = "";
+        try {
+          for (let part = 0; part < accounts; part++) {
+            let offset = 0;
+            do {
+              const page = await request("GET", "", `/api/reviews/meli?part=${part}&offset=${offset}&limit=150`, 290_000);
+              accounts = page.accounts ?? 1;
+              for (const key of ["items", "withoutSkuCount", "withoutText", "withoutReviews", "errors"]) data[key] += page[key] || 0;
+              data.firstError ||= page.firstError || "";
+              data.reviews.push(...page.reviews);
+              offset = page.nextOffset ?? null;
+            } while (offset != null);
+          }
+        } catch (err) {
+          if (!data.reviews.length) throw err;
+          stopped = err.message; // Se conserva lo leído hasta acá y se informa que quedó incompleto.
+        }
         const known = knownSkus();
         const summary = { at: now().toISOString(), items: data.items, withoutSku: data.withoutSkuCount, withoutText: data.withoutText,
-          withoutReviews: data.withoutReviews, errors: data.errors, found: data.reviews.length, imported: 0, repeated: 0, unknownSku: 0, invalid: 0 };
+          withoutReviews: data.withoutReviews, errors: data.errors, firstError: data.firstError, found: data.reviews.length, imported: 0, repeated: 0,
+          unknownSku: 0, invalid: 0, ...(stopped ? { partial: stopped } : {}) };
         await mutate((all) => {
           const external = new Set(all.map((r) => r.externalId && `${r.externalId}|${r.sku}`).filter(Boolean));
           const keys = new Set(all.map(reviewKey)), added = [];
