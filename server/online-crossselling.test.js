@@ -188,3 +188,18 @@ test("informe online: pide el período firmado a Logitrack y valida las fechas",
   assert.equal(pedido.searchParams.get("storeId"), "7570182");
   await assert.rejects(pub.report("ayer", "hoy"), /Período inválido/);
 });
+
+test("con CROSS_SELLING_AUTO=no el publicador no publica solo, pero sí a pedido", async () => {
+  let calls = 0;
+  const make = (auto) => createOnlinePublisher({ connection: { url: "https://logitrack.test", key: "k".repeat(40), storeId: "7570182", auto },
+    read: () => ({}), write: async () => {}, source: () => ({ products, rules, settings }), now: () => now,
+    fetchImpl: async () => { calls++; return { ok: false, status: 500, json: async () => ({}) }; } });
+  make(false).schedule();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(calls, 0);
+  make(undefined).schedule();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(calls, 1);
+  await assert.rejects(make(false).publish(), /Logitrack/);
+  assert.equal(calls, 2);
+});

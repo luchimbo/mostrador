@@ -57,7 +57,8 @@ export function createOnlinePublisher({ connection, read, write, source, fetchIm
     return running;
   }
   // Guardar una regla local nunca depende de la disponibilidad de la tienda online.
-  function schedule() { if (configured) void publish().catch(() => {}); }
+  // CROSS_SELLING_AUTO=no: una copia de Mostrador (prueba, otro servidor) no publica reglas sola y no pisa las de la tienda en vivo.
+  function schedule() { if (configured && connection.auto !== false) void publish().catch(() => {}); }
   async function remoteStatus() {
     if (!configured) return status();
     const remote = await request("GET");
