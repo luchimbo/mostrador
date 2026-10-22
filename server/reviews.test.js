@@ -92,7 +92,7 @@ test("importa las opiniones de Mercado Libre como pendientes, sin repetir ni ace
     fetchImpl: async (url) => { urls.push(String(url)); return { ok: true, json: async () => meli }; } });
   const first = await publisher.importMeli();
   assert.deepEqual([first.imported, first.unknownSku, first.invalid, first.repeated], [1, 1, 1, 0]);
-  assert.match(urls[0], /\/api\/reviews\/meli\?storeId=78394$/);
+  assert.match(urls[0], /\/api\/reviews\/meli\?part=0&offset=0&limit=150&storeId=78394$/);
   const [saved] = publisher.list();
   assert.deepEqual([saved.estado, saved.autor, saved.origen, saved.externalId], ["pendiente", "Comprador de MercadoLibre", "mercadolibre", "ml:1"]);
   const second = await publisher.importMeli();
@@ -109,4 +109,23 @@ test("si Logitrack falla al leer Mercado Libre queda el motivo y no se pierde lo
   await assert.rejects(publisher.importMeli(), /No hay una cuenta/);
   assert.match(publisher.status().meli.error, /No hay una cuenta/);
   assert.equal(publisher.list().length, 1);
+});
+
+test("Mercado Libre se lee por tandas y por cuenta, y si se corta se conserva lo leído", async () => {
+  let doc = { reviews: [] };
+  const pages = { "0:0": { accounts: 2, items: 2, nextOffset: 2, reviews: [{ externalId: "ml:1", sku: "A1", rating: 5, texto: "Excelente producto", fecha: "2026-09-10", enlace: "" }] },
+    "0:2": { accounts: 2, items: 1, nextOffset: null, errors: 1, firstError: "too many requests", reviews: [{ externalId: "ml:2", sku: "A1", rating: 4, texto: "Muy bueno todo", fecha: "2026-09-11", enlace: "" }] } };
+  const urls = [];
+  const publisher = createReviewsPublisher({ connection: { url: "https://logitrack.test", key: "k".repeat(40), storeId: "78394" },
+    read: (_n, f) => doc ?? f, write: async (_n, v) => { doc = v; },
+    fetchImpl: async (url) => {
+      const q = new URL(url).searchParams; urls.push(`${q.get("part")}:${q.get("offset")}`);
+      const page = pages[`${q.get("part")}:${q.get("offset")}`];
+      return page ? { ok: true, json: async () => page } : { ok: false, status: 502, json: async () => ({ error: "Mercado Libre caído" }) };
+    } });
+  const summary = await publisher.importMeli();
+  assert.deepEqual(urls, ["0:0", "0:2", "1:0"]);
+  assert.deepEqual([summary.imported, summary.items, summary.errors, summary.firstError], [2, 3, 1, "too many requests"]);
+  assert.match(summary.partial, /Mercado Libre caído/);
+  assert.equal(publisher.list().length, 2);
 });
