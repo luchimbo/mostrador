@@ -199,3 +199,11 @@ Falta: conexión de PC MIDI en Logitrack con permisos de descuentos y scripts, c
 - `GET /api/cross-selling/report?storeId&from&to`, firmado igual que la publicación: pedidos y facturado online (pagados y no cancelados), ventas con cross-selling, vendido, descuento otorgado, por regla (mostradas, aceptadas, vendidas, vendido) y por producto.
 - Mostrador: en **Informes**, «Cross-selling por canal» con Mostrador, Tienda online y Total para el período elegido. En **Recomendaciones**, cada regla muestra «Mostrador: …» y «Online: …».
 - Límites: el facturado online cuenta desde que PC MIDI quedó conectada (19/10/2026). Falta confirmar con un pedido real cómo informa Tiendanube `promotional_discount.promotions_applied`; sin ese detalle alcanza con que haya descuento promocional. El Excel sigue siendo sólo del mostrador.
+
+## Aceptación con carrito sin confirmar (22/10/2026)
+
+- Síntoma: «Tiendanube todavía no confirmó este carrito» al tocar **Agregar con descuento** (409 en `/storefront/accept`). En los logs del 22/10, cada 409 no tenía un callback de TN previo para ese carrito; cada 200 sí.
+- Causa, comprobada en `pcmidi.com.ar`: TN llama al callback de descuentos cuando cambia el carrito (agregar, `/cart/update/`), no al mostrarlo. Cargar `/comprar/` no lo dispara. Un carrito sin cambios desde hace más de 2 h (vence el evento en Redis) o recién mostrado no tiene carrito confirmado.
+- Corrección (Logitrack `230a19c`, `dpl_3m6RGLTK35jLvMnyPB66gdZ5MX3G`): el accept responde `code: "cart_pending"` (también cuando el carrito guardado no tiene el principal). El script vuelve a guardar la misma cantidad del principal en `/cart/update/`, lo que dispara el callback en ~1,5 s, y reintenta (hasta 2 veces).
+- Prueba en PC MIDI con el primer accept forzado a `cart_pending` en el navegador: recálculo → callback → accept 200 → funda agregada y «Completá tu equipo: -$740,84». El carrito de prueba quedó vacío. La aceptación de prueba quedó registrada (sin pedido).
+- En el navegador, el script de Partners se carga con la primera interacción (`onfirstinteraction`), no al cargar la página.
