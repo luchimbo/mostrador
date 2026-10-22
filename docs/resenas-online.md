@@ -28,3 +28,10 @@ No se agrega JSON-LD (`AggregateRating`): las reseñas importadas de otros sitio
 - `npm test` de Mostrador y las pruebas de Logitrack (88 + las 3 que necesitan `node_modules`), eslint de lo nuevo, `vite build`.
 - Script de la tienda probado sobre una ficha real de pcmidi.com.ar con datos simulados: estrellas, bloque, «Ver más», HTML del texto escapado.
 - **No** se probó contra el Logitrack desplegado ni la publicación firmada de punta a punta (la ruta nueva todavía no existe en producción).
+
+## Importador de MercadoLibre
+- Mostrador pide a Logitrack `GET /api/reviews/meli` (firmado). Logitrack usa la cuenta de MercadoLibre vinculada al espacio de la tienda: lista las publicaciones activas, toma el SKU (`seller_custom_field` o atributo `SELLER_SKU`) y lee `GET /reviews/item/{id}` (si la publicación no tiene opiniones y es de catálogo, prueba con el producto de catálogo).
+- Entran como **pendientes**, con autor «Comprador de MercadoLibre» (MercadoLibre ofusca al comprador), el link de la publicación y el id de la opinión para no repetirlas. Se omiten: publicaciones sin SKU, SKU que no están en el catálogo, calificaciones sin texto y opiniones no publicadas.
+- Corre solo una vez por día (y 2 minutos después de arrancar el servidor, sólo en modo real) y con el botón «Buscar en MercadoLibre». El resultado de la última búsqueda se ve en la pantalla.
+- Nunca aprueba solas: la aprobación sigue siendo manual. Aprobar sólo las de 4 y 5 estrellas distorsiona el promedio.
+- **Sin verificar contra MercadoLibre real**: probado con un cliente simulado. Falta confirmar la respuesta real del endpoint, que las publicaciones tengan SKU cargado y que los términos de MercadoLibre permitan mostrar sus opiniones en la tienda.

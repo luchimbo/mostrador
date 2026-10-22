@@ -1,4 +1,5 @@
-import { buildReviewsSnapshot } from "../shared/reviews.js";
+import crypto from "node:crypto";
+import { buildReviewsSnapshot, normalizeReview, reviewKey } from "../shared/reviews.js";
 import { publicationSignature, snapshotRevision } from "../shared/publish-protocol.js";
 
 const DOCUMENT = "resenas.json";
@@ -6,7 +7,7 @@ const defaults = { reviews: [], enabled: false, lastPublishedAt: null, lastRevis
 
 // Reseñas de productos: se cargan y moderan en Mostrador y se publican a Logitrack con la misma firma
 // que el cross-selling. «enabled» viaja dentro de la publicación: apagado, la tienda no muestra nada.
-export function createReviewsPublisher({ connection, read, write, fetchImpl = fetch, now = () => new Date() }) {
+export function createReviewsPublisher({ connection, read, write, knownSkus = () => null, fetchImpl = fetch, now = () => new Date() }) {
   let running = null, pending = false, queue = Promise.resolve();
   const configured = Boolean(connection.url && connection.key?.length >= 32 && /^\d+$/.test(connection.storeId));
   const state = () => ({ ...defaults, ...read(DOCUMENT, {}) });
@@ -25,16 +26,19 @@ export function createReviewsPublisher({ connection, read, write, fetchImpl = fe
       productos: new Set(published.map((r) => r.sku)).size };
   }
   const list = () => state().reviews;
-  async function request(method, body = "") {
+  async function request(method, body = "", endpoint = "/api/reviews/config", timeout = 30_000) {
     const base = new URL(connection.url);
     if (base.protocol !== "https:" && !(base.protocol === "http:" && ["localhost", "127.0.0.1"].includes(base.hostname))) throw new Error("Logitrack debe usar HTTPS");
-    const url = new URL("/api/reviews/config", base);
+    const url = new URL(endpoint, base);
     url.searchParams.set("storeId", connection.storeId);
     const path = url.pathname + url.search, timestamp = String(now().getTime());
-    const response = await fetchImpl(url, { method, body: method === "GET" ? undefined : body, redirect: "error", signal: AbortSignal.timeout(30_000),
+    const response = await fetchImpl(url, { method, body: method === "GET" ? undefined : body, redirect: "error", signal: AbortSignal.timeout(timeout),
       headers: { "Content-Type": "application/json", "x-mostrador-timestamp": timestamp,
         "x-mostrador-signature": publicationSignature({ key: connection.key, method, path, timestamp, body }) } });
-    if (!response.ok) throw new Error(`Logitrack no pudo recibir las reseñas (HTTP ${response.status})`);
+    if (!response.ok) {
+      const detail = await response.json().then((b) => b?.error).catch(() => null);
+      throw new Error(`${detail || "Logitrack no pudo procesar las reseñas"} (HTTP ${response.status})`);
+    }
     return response.json();
   }
   async function publishOnce() {
@@ -59,5 +63,39 @@ export function createReviewsPublisher({ connection, read, write, fetchImpl = fe
     await save({ enabled });
     return publish();
   }
-  return { status, list, mutate, publish, setEnabled, remoteStatus: () => configured ? request("GET") : null };
+  // Opiniones de Mercado Libre: Logitrack las lee con la cuenta vinculada; acá entran como «pendiente» para revisarlas.
+  let importing = null;
+  function importMeli() {
+    return importing ||= (async () => {
+      if (!configured) throw new Error("Configurá la conexión con Logitrack en el servidor");
+      try {
+        const data = await request("GET", "", "/api/reviews/meli", 290_000);
+        const known = knownSkus();
+        const summary = { at: now().toISOString(), items: data.items, withoutSku: data.withoutSkuCount, withoutText: data.withoutText,
+          withoutReviews: data.withoutReviews, errors: data.errors, found: data.reviews.length, imported: 0, repeated: 0, unknownSku: 0, invalid: 0 };
+        await mutate((all) => {
+          const external = new Set(all.map((r) => r.externalId && `${r.externalId}|${r.sku}`).filter(Boolean));
+          const keys = new Set(all.map(reviewKey)), added = [];
+          for (const raw of data.reviews) {
+            let review;
+            try { review = normalizeReview({ ...raw, autor: "Comprador de MercadoLibre", origen: "mercadolibre", estado: "pendiente" }); }
+            catch { summary.invalid++; continue; }
+            if (known && !known.has(review.sku)) { summary.unknownSku++; continue; }
+            const ext = `${review.externalId}|${review.sku}`;
+            if (external.has(ext) || keys.has(reviewKey(review))) { summary.repeated++; continue; }
+            external.add(ext); keys.add(reviewKey(review));
+            added.push({ ...review, id: crypto.randomUUID() });
+          }
+          summary.imported = added.length;
+          return { reviews: [...added, ...all], result: null };
+        });
+        await save({ meli: summary });
+        return summary;
+      } catch (err) {
+        await save({ meli: { ...(state().meli || {}), at: now().toISOString(), error: err.message } });
+        throw err;
+      } finally { importing = null; }
+    })();
+  }
+  return { status, list, mutate, publish, setEnabled, importMeli, remoteStatus: () => configured ? request("GET") : null };
 }

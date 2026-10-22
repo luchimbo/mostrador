@@ -94,7 +94,9 @@ let destacados = readJson("destacados.json", config.mode === "mock" ? ["102", "2
 const onlinePublisher = createOnlinePublisher({ connection: config.onlineCrossSelling, read: readJson, write: writeJson,
   source: () => ({ products: [...productsById.values()], rules: reglas, settings: getSettings() }) });
 
-const reviewsPublisher = createReviewsPublisher({ connection: config.onlineCrossSelling, read: readJson, write: writeJson });
+// Sin catálogo cargado todavía no se puede descartar ningún SKU.
+const reviewsPublisher = createReviewsPublisher({ connection: config.onlineCrossSelling, read: readJson, write: writeJson,
+  knownSkus: () => { const skus = codigosCatalogo(); return skus.size ? skus : null; } });
 
 // ---------- Venta en curso ----------
 const sale = new Sale();
@@ -432,6 +434,10 @@ app.post("/api/resenas/importar", async (req, res) => {
       errores: errors.slice(0, 50), totalErrores: errors.length });
   } catch (err) { reseniaError(res, err); }
 });
+app.post("/api/resenas/mercadolibre", async (_req, res) => {
+  try { res.json(await reviewsPublisher.importMeli()); }
+  catch (err) { res.status(502).json({ error: err.message }); }
+});
 app.post("/api/resenas/publicar", async (_req, res) => {
   try { res.json(await reviewsPublisher.publish()); }
   catch (err) { res.status(502).json({ error: err.message }); }
@@ -600,3 +606,10 @@ const ultimaCompleta = Date.parse(estadoTienda().completo || 0) || 0;
 actualizarTienda({ completa: Date.now() - ultimaCompleta > intervaloCompleto });
 setInterval(() => actualizarTienda(), config.preciosRefreshMinutes * 60_000);
 setInterval(() => actualizarTienda({ completa: true }), intervaloCompleto);
+
+// Opiniones de Mercado Libre: una vez por día (y al rato de arrancar, cuando ya hay catálogo). Entran como pendientes.
+if (config.mode === "real" && reviewsPublisher.status().configured) {
+  const buscarOpiniones = () => reviewsPublisher.importMeli().catch((err) => console.error("[reseñas] Mercado Libre:", err.message));
+  setTimeout(buscarOpiniones, 2 * 60_000);
+  setInterval(buscarOpiniones, 24 * 60 * 60_000);
+}
