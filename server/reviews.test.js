@@ -176,3 +176,10 @@ test("un error de la búsqueda no adelanta la fecha de la última que terminó b
   await assert.rejects(publisher.importMeli(), /caído/);
   assert.deepEqual([doc.meli.at, doc.meli.imported, doc.meli.errorAt], ["2026-10-01T00:00:00.000Z", 5, "2026-10-22T12:00:00.000Z"]);
 });
+
+test("la ruta del módulo está antes que la de una opinión por id (si no, «modulo» se tomaría como un id)", async () => {
+  const fs = await import("node:fs");
+  const src = fs.readFileSync(new URL("./index.js", import.meta.url), "utf8");
+  const modulo = src.indexOf('app.put("/api/resenas/modulo"'), porId = src.indexOf('app.put("/api/resenas/:id"');
+  assert.ok(modulo > 0 && porId > 0 && modulo < porId);
+});
