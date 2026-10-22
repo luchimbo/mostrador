@@ -35,6 +35,7 @@ export const config = {
     url: (env.CROSS_SELLING_LOGITRACK_URL || "").trim(),
     key: (env.CROSS_SELLING_PUBLISH_KEY || "").trim(),
     storeId: (env.CROSS_SELLING_STORE_ID || "").trim(),
+    auto: (env.CROSS_SELLING_AUTO || "").trim().toLowerCase() !== "no",
   },
   dataDir: path.join(ROOT, "data", mode),
   // Contraseña compartida para entrar al mostrador. Vacía = sin login (solo para uso en esta computadora).
