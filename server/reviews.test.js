@@ -148,3 +148,31 @@ test("aprueba en bloque sólo lo pendiente y la búsqueda de Mercado Libre se pu
   assert.equal(publisher.startImportMeli(), true);
   assert.equal(publisher.status().importando, true);
 });
+
+test("la búsqueda de Mercado Libre toca una vez por semana y un reinicio no la repite", () => {
+  const day = 24 * 60 * 60_000, base = Date.parse("2026-10-22T12:00:00Z");
+  let clock = base, doc = { reviews: [] };
+  const publisher = createReviewsPublisher({ connection: { url: "https://logitrack.test", key: "k".repeat(40), storeId: "78394" },
+    read: (_n, f) => doc ?? f, write: async (_n, v) => { doc = v; }, now: () => new Date(clock) });
+  assert.equal(publisher.meliDue(), true); // nunca se buscó
+  doc = { reviews: [], meli: { at: new Date(base - 2 * day).toISOString() } };
+  assert.equal(publisher.meliDue(), false); // hace 2 días
+  const restarted = createReviewsPublisher({ connection: { url: "https://logitrack.test", key: "k".repeat(40), storeId: "78394" },
+    read: (_n, f) => doc ?? f, write: async () => {}, now: () => new Date(clock) });
+  assert.equal(restarted.meliDue(), false); // servidor nuevo, mismos datos guardados
+  clock = base + 6 * day;
+  assert.equal(publisher.meliDue(), true); // pasaron 8 días
+  doc = { reviews: [], meli: { at: new Date(base - 8 * day).toISOString(), errorAt: new Date(base + 6 * day - 60_000).toISOString() } };
+  assert.equal(publisher.meliDue(), false); // falló hace un minuto: espera para reintentar
+  clock += 7 * 60 * 60_000;
+  assert.equal(publisher.meliDue(), true);
+});
+
+test("un error de la búsqueda no adelanta la fecha de la última que terminó bien", async () => {
+  let doc = { reviews: [], meli: { at: "2026-10-01T00:00:00.000Z", imported: 5 } };
+  const publisher = createReviewsPublisher({ connection: { url: "https://logitrack.test", key: "k".repeat(40), storeId: "78394" },
+    read: (_n, f) => doc ?? f, write: async (_n, v) => { doc = v; }, now: () => new Date("2026-10-22T12:00:00Z"),
+    fetchImpl: async () => ({ ok: false, status: 502, json: async () => ({ error: "caído" }) }) });
+  await assert.rejects(publisher.importMeli(), /caído/);
+  assert.deepEqual([doc.meli.at, doc.meli.imported, doc.meli.errorAt], ["2026-10-01T00:00:00.000Z", 5, "2026-10-22T12:00:00.000Z"]);
+});

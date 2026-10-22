@@ -122,13 +122,21 @@ export function createReviewsPublisher({ connection, read, write, knownSkus = ()
         if (summary.imported > 0 && state().enabled) publish().catch(() => {});
         return summary;
       } catch (err) {
-        await save({ meli: { ...(state().meli || {}), at: now().toISOString(), error: err.message } });
+        // «at» es la última búsqueda que terminó bien: un error no la adelanta, así no se pierde el calendario semanal.
+        await save({ meli: { ...(state().meli || {}), error: err.message, errorAt: now().toISOString() } });
         throw err;
       }
     })().finally(() => { importing = null; });
     return importing;
   }
+  // Búsqueda semanal: toca si la última que terminó bien tiene 7 días o más, y tras un error se espera 6 horas para reintentar.
+  const WEEK_MS = 7 * 24 * 60 * 60_000, RETRY_MS = 6 * 60 * 60_000;
+  function meliDue() {
+    const { meli } = state(), t = now().getTime();
+    const age = (iso) => (iso ? t - Date.parse(iso) : Infinity);
+    return age(meli?.at) >= WEEK_MS && age(meli?.errorAt) >= RETRY_MS;
+  }
   // Lo usa el botón: la búsqueda tarda minutos, así que corre aparte y la pantalla consulta el avance.
   function startImportMeli() { if (!importing) importMeli().catch(() => {}); return Boolean(importing); }
-  return { status, list, mutate, approvePending, publish, setEnabled, importMeli, startImportMeli, remoteStatus: () => configured ? request("GET") : null };
+  return { status, list, mutate, approvePending, publish, setEnabled, importMeli, startImportMeli, meliDue, remoteStatus: () => configured ? request("GET") : null };
 }
