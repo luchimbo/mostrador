@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, buscar, pesos } from "./lib.js";
 import PantallaReposo from "./PantallaReposo.jsx";
 import OnlineCrossSelling from "./OnlineCrossSelling.jsx";
+import ReviewsOnline from "./ReviewsOnline.jsx";
 import { reglaSeDispara } from "../shared/recommendations.js";
 
 const coincideDisparador = (regla, p, porId) => reglaSeDispara(
@@ -27,6 +28,7 @@ export default function Admin() {
             ["destacados", "Pantalla en reposo"],
             ["tienda", "Tienda online"],
             ["crossselling-online", "Cross-selling online"],
+            ["resenas-online", "Reseñas online"],
             ["ajustes", "Descuentos y topes"],
             ["facturas", "Facturas emitidas"],
             ["informes", "Informes"],
@@ -41,6 +43,7 @@ export default function Admin() {
       {tab === "destacados" && <PantallaReposo productos={productos} porId={porId} SelectorProducto={SelectorProducto}><Destacados productos={productos} porId={porId} /></PantallaReposo>}
       {tab === "tienda" && <Tienda productos={productos} onActualizado={cargarCatalogo} />}
       {tab === "crossselling-online" && <OnlineCrossSelling productos={productos} />}
+      {tab === "resenas-online" && <ReviewsOnline productos={productos} />}
       {tab === "ajustes" && <Ajustes />}
       {tab === "facturas" && <FacturasEmitidas />}
       {tab === "informes" && <Informes />}

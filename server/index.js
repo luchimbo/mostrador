@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
@@ -16,6 +17,8 @@ import { actualizarPreciosTienda, combinarConTienda, estadoTienda, sincronizarTi
 import { productosEnReposo } from "../shared/display.js";
 import { incluirProductosPrueba } from "./catalog.js";
 import { createOnlinePublisher } from "./online-publisher.js";
+import { createReviewsPublisher } from "./reviews-publisher.js";
+import { importCsv, normalizeReview, reviewKey } from "../shared/reviews.js";
 import { comprobanteEmitido, registrarCobranza } from "./cobranza.js";
 import { estadisticas, filasReporte, generarReporteExcel, sinProductosPrueba } from "./reporte.js";
 
@@ -90,6 +93,8 @@ let destacados = readJson("destacados.json", config.mode === "mock" ? ["102", "2
 
 const onlinePublisher = createOnlinePublisher({ connection: config.onlineCrossSelling, read: readJson, write: writeJson,
   source: () => ({ products: [...productsById.values()], rules: reglas, settings: getSettings() }) });
+
+const reviewsPublisher = createReviewsPublisher({ connection: config.onlineCrossSelling, read: readJson, write: writeJson });
 
 // ---------- Venta en curso ----------
 const sale = new Sale();
@@ -311,7 +316,7 @@ io.on("connection", (socket) => {
 });
 
 // ---------- API REST para el panel de administración ----------
-app.use(express.json());
+app.use(express.json({ limit: "3mb" })); // El import de reseñas por CSV puede pasar los 100 kb.
 
 const intentos = crearLimite();
 app.get("/api/sesion", (req, res) => res.json({ ok: conSesion(req.headers.cookie), requerida: Boolean(config.claveAcceso) }));
@@ -368,6 +373,76 @@ app.get("/api/crossselling-online/modulo", async (_req, res) => {
 app.put("/api/crossselling-online/modulo", async (req, res) => {
   if (typeof req.body?.enabled !== "boolean") return res.status(400).json({ error: "Indicá enabled: true o false." });
   try { res.json(await onlinePublisher.setModule(req.body.enabled)); }
+  catch (err) { res.status(502).json({ error: err.message }); }
+});
+// Reseñas de productos para la tienda online (se cargan acá, se publican a Logitrack).
+const codigosCatalogo = () => new Set([...productsById.values()].map((p) => String(p.codigo || "").trim().toUpperCase()));
+const reseniaError = (res, err) => res.status(400).json({ error: err.message });
+app.get("/api/resenas", (_req, res) => res.json({ ...reviewsPublisher.status(), reviews: reviewsPublisher.list() }));
+app.post("/api/resenas", async (req, res) => {
+  try {
+    const review = { ...normalizeReview(req.body || {}), id: crypto.randomUUID() };
+    if (!codigosCatalogo().has(review.sku)) throw new Error("Ese SKU no está en el catálogo");
+    await reviewsPublisher.mutate((all) => {
+      if (all.some((r) => reviewKey(r) === reviewKey(review))) throw new Error("Esa opinión ya está cargada");
+      return { reviews: [review, ...all], result: review };
+    });
+    res.status(201).json(review);
+  } catch (err) { reseniaError(res, err); }
+});
+app.put("/api/resenas/:id", async (req, res) => {
+  try {
+    const updated = await reviewsPublisher.mutate((all) => {
+      const current = all.find((r) => r.id === req.params.id);
+      if (!current) throw new Error("No existe esa reseña");
+      const next = normalizeReview({ ...current, ...req.body, id: current.id });
+      if (!codigosCatalogo().has(next.sku)) throw new Error("Ese SKU no está en el catálogo");
+      return { reviews: all.map((r) => (r.id === next.id ? next : r)), result: next };
+    });
+    res.json(updated);
+  } catch (err) { reseniaError(res, err); }
+});
+app.delete("/api/resenas/:id", async (req, res) => {
+  try {
+    await reviewsPublisher.mutate((all) => {
+      if (!all.some((r) => r.id === req.params.id)) throw new Error("No existe esa reseña");
+      return { reviews: all.filter((r) => r.id !== req.params.id), result: null };
+    });
+    res.json({ ok: true });
+  } catch (err) { reseniaError(res, err); }
+});
+// Con confirmar=false sólo muestra qué se importaría; con true carga lo válido como «pendiente».
+app.post("/api/resenas/importar", async (req, res) => {
+  try {
+    const { valid, errors } = importCsv(req.body?.csv);
+    const known = codigosCatalogo();
+    const dentro = valid.filter((r) => known.has(r.sku));
+    const confirmar = req.body?.confirmar === true;
+    let nuevas = [];
+    if (confirmar) {
+      await reviewsPublisher.mutate((all) => {
+        const keys = new Set(all.map(reviewKey));
+        nuevas = dentro.filter((r) => !keys.has(reviewKey(r)) && keys.add(reviewKey(r)))
+          .map((r) => ({ ...r, id: crypto.randomUUID(), estado: "pendiente" }));
+        return { reviews: [...nuevas, ...all], result: null };
+      });
+    }
+    res.json({ confirmado: confirmar, importables: dentro.length, importadas: nuevas.length, repetidas: confirmar ? dentro.length - nuevas.length : 0,
+      skuDesconocidos: [...new Set(valid.filter((r) => !known.has(r.sku)).map((r) => r.sku))],
+      errores: errors.slice(0, 50), totalErrores: errors.length });
+  } catch (err) { reseniaError(res, err); }
+});
+app.post("/api/resenas/publicar", async (_req, res) => {
+  try { res.json(await reviewsPublisher.publish()); }
+  catch (err) { res.status(502).json({ error: err.message }); }
+});
+app.post("/api/resenas/estado", async (_req, res) => {
+  try { res.json({ ...reviewsPublisher.status(), remote: await reviewsPublisher.remoteStatus() }); }
+  catch (err) { res.status(502).json({ error: err.message }); }
+});
+app.put("/api/resenas/modulo", async (req, res) => {
+  if (typeof req.body?.enabled !== "boolean") return res.status(400).json({ error: "Indicá enabled: true o false." });
+  try { res.json(await reviewsPublisher.setEnabled(req.body.enabled)); }
   catch (err) { res.status(502).json({ error: err.message }); }
 });
 app.put("/api/reglas", async (req, res) => {

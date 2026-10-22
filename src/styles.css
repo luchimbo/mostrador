@@ -430,3 +430,11 @@ s { color: var(--gris); margin-right: 6px; font-weight: 400; }
 }
 .modulo-online { margin: 12px 0; }
 .modulo-online .check { display: flex; gap: 8px; align-items: center; }
+
+.boton-archivo { display: inline-flex; align-items: center; padding: 8px 14px; border: 1px solid var(--borde); border-radius: 8px; background: #fff; cursor: pointer; }
+.nota-resenas { font-size: 0.85em; color: var(--gris); }
+.form-resena { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-top: 10px; }
+.form-resena label { display: grid; gap: 4px; }
+.form-resena .ancho { grid-column: 1 / -1; }
+.filtros-resenas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+.filtros-resenas label { display: grid; gap: 4px; }

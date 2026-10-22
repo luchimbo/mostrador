@@ -8,7 +8,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const target = process.argv[2];
 if (!target) throw new Error("Uso: node scripts/sync-crossselling-engine.js <carpeta de Logitrack> [--check]");
 const destination = path.resolve(target, "src/lib/crossselling/engine");
-const files = ["pricing.js", "recommendations.js", "reglas.js", "online-crossselling.js", "publish-protocol.js"];
+const files = ["pricing.js", "recommendations.js", "reglas.js", "online-crossselling.js", "publish-protocol.js", "reviews.js"];
 const check = process.argv.includes("--check");
 const hashes = {};
 if (!check) await fs.mkdir(destination, { recursive: true });
