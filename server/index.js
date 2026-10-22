@@ -623,9 +623,12 @@ actualizarTienda({ completa: Date.now() - ultimaCompleta > intervaloCompleto });
 setInterval(() => actualizarTienda(), config.preciosRefreshMinutes * 60_000);
 setInterval(() => actualizarTienda({ completa: true }), intervaloCompleto);
 
-// Opiniones de Mercado Libre: una vez por día (y al rato de arrancar, cuando ya hay catálogo). Entran como pendientes.
+// Opiniones de Mercado Libre: una vez por semana. La fecha de la última búsqueda queda guardada en la base,
+// así que reiniciar o redesplegar el servidor no la repite: se revisa al arrancar (con el catálogo ya cargado) y cada hora.
 if (config.mode === "real" && reviewsPublisher.status().configured) {
-  const buscarOpiniones = () => reviewsPublisher.importMeli().catch((err) => console.error("[reseñas] Mercado Libre:", err.message));
-  setTimeout(buscarOpiniones, 2 * 60_000);
-  setInterval(buscarOpiniones, 24 * 60 * 60_000);
+  const buscarSiToca = () => {
+    if (reviewsPublisher.meliDue()) reviewsPublisher.importMeli().catch((err) => console.error("[reseñas] Mercado Libre:", err.message));
+  };
+  setTimeout(buscarSiToca, 2 * 60_000);
+  setInterval(buscarSiToca, 60 * 60_000);
 }

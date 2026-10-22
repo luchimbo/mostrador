@@ -86,8 +86,8 @@ export default function ReviewsOnline({ productos }) {
         </label>
       </div>
       {data.meli && <p className="nota-resenas">
-        <b>MercadoLibre</b> (se busca solo una vez por día; las nuevas entran ya aprobadas y, con el módulo activo, salen a la tienda solas): última búsqueda {new Date(data.meli.at).toLocaleString("es-AR")}.
-        {data.meli.error ? ` Error: ${data.meli.error}` : ` ${data.meli.items} publicaciones revisadas, ${data.meli.found} opiniones con texto, ${data.meli.imported} nuevas, ${data.meli.repeated} ya cargadas.`}
+        <b>MercadoLibre</b> (se busca sola una vez por semana; las nuevas entran ya aprobadas y, con el módulo activo, salen a la tienda solas): {data.meli.at ? `última búsqueda ${new Date(data.meli.at).toLocaleString("es-AR")}.` : "todavía no terminó ninguna búsqueda."}
+        {data.meli.error ? ` Error en el último intento: ${data.meli.error}` : ` ${data.meli.items} publicaciones revisadas, ${data.meli.found} opiniones con texto, ${data.meli.imported} nuevas, ${data.meli.repeated} ya cargadas.`}
         {data.meli.partial && ` Quedó incompleta: ${data.meli.partial}`}
         {data.meli.errors > 0 && data.meli.firstError && ` Primer error de MercadoLibre: ${data.meli.firstError}`}
         {!data.meli.error && (data.meli.withoutSku > 0 || data.meli.unknownSku > 0 || data.meli.withoutText > 0 || data.meli.errors > 0) && ` Omitidas: ${data.meli.withoutSku} publicaciones sin SKU, ${data.meli.unknownSku} con SKU que no está en el catálogo, ${data.meli.withoutText} calificaciones sin texto, ${data.meli.errors} publicaciones con error.`}
