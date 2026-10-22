@@ -79,3 +79,34 @@ test("si Logitrack no confirma la versión, queda el error y no se marca como pu
   assert.match(publisher.status().error, /no confirmó/);
   assert.equal(publisher.status().lastPublishedAt, null);
 });
+
+test("importa las opiniones de Mercado Libre como pendientes, sin repetir ni aceptar SKU ajenos", async () => {
+  let doc = { reviews: [] };
+  const meli = { items: 3, withoutSkuCount: 1, withoutText: 2, withoutReviews: 0, errors: 0, reviews: [
+    { externalId: "ml:1", sku: "ZTO115", rating: 5, texto: "Excelente producto", fecha: "2026-09-10", enlace: "https://articulo.mercadolibre.com.ar/MLA1" },
+    { externalId: "ml:2", sku: "AJENO", rating: 4, texto: "Otro producto", fecha: "2026-09-11", enlace: "" },
+    { externalId: "ml:3", sku: "ZTO115", rating: 5, texto: "Sin fecha válida", fecha: "", enlace: "" }] };
+  const urls = [];
+  const publisher = createReviewsPublisher({ connection: { url: "https://logitrack.test", key: "k".repeat(40), storeId: "78394" },
+    read: (_n, f) => doc ?? f, write: async (_n, v) => { doc = v; }, knownSkus: () => new Set(["ZTO115"]),
+    fetchImpl: async (url) => { urls.push(String(url)); return { ok: true, json: async () => meli }; } });
+  const first = await publisher.importMeli();
+  assert.deepEqual([first.imported, first.unknownSku, first.invalid, first.repeated], [1, 1, 1, 0]);
+  assert.match(urls[0], /\/api\/reviews\/meli\?storeId=78394$/);
+  const [saved] = publisher.list();
+  assert.deepEqual([saved.estado, saved.autor, saved.origen, saved.externalId], ["pendiente", "Comprador de MercadoLibre", "mercadolibre", "ml:1"]);
+  const second = await publisher.importMeli();
+  assert.deepEqual([second.imported, second.repeated], [0, 1]);
+  assert.equal(publisher.list().length, 1);
+  assert.equal(publisher.status().meli.imported, 0);
+});
+
+test("si Logitrack falla al leer Mercado Libre queda el motivo y no se pierde lo cargado", async () => {
+  let doc = { reviews: [{ id: "x", sku: "A", estado: "pendiente" }] };
+  const publisher = createReviewsPublisher({ connection: { url: "https://logitrack.test", key: "k".repeat(40), storeId: "78394" },
+    read: (_n, f) => doc ?? f, write: async (_n, v) => { doc = v; },
+    fetchImpl: async () => ({ ok: false, status: 409, json: async () => ({ error: "No hay una cuenta de Mercado Libre conectada" }) }) });
+  await assert.rejects(publisher.importMeli(), /No hay una cuenta/);
+  assert.match(publisher.status().meli.error, /No hay una cuenta/);
+  assert.equal(publisher.list().length, 1);
+});

@@ -17,7 +17,9 @@ export function normalizeReview(raw, { today = new Date().toISOString().slice(0,
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date)) || date > today) throw new Error("Fecha inválida: usá AAAA-MM-DD y no futura");
   if (link && !/^https:\/\/[^\s]+$/.test(link)) throw new Error("El enlace de origen debe empezar con https://");
   const state = STATES.includes(raw.estado) ? raw.estado : "pendiente";
-  return { id: String(raw.id || ""), sku: code, rating, autor: author, texto: text, fecha: date, origen: source, enlace: link.slice(0, 300), estado: state };
+  const external = clip(raw.externalId, 80);
+  return { id: String(raw.id || ""), sku: code, rating, autor: author, texto: text, fecha: date, origen: source, enlace: link.slice(0, 300), estado: state,
+    ...(external ? { externalId: external } : {}) };
 }
 
 // CSV con comillas y separador «,» o «;» (Excel en español exporta con «;»).
