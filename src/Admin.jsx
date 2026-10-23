@@ -85,7 +85,7 @@ function FacturasEmitidas() {
 }
 
 const MEDIOS = { mercadopago: "MercadoPago", efectivo: "Efectivo", otros: "Otros", transferencia: "Transferencia", debito: "Débito", credito: "Crédito" };
-const pct = (parte, total) => (total ? `${Math.round((parte / total) * 100)}%` : "—");
+const pct = (parte, total) => (total ? `${((parte / total) * 100).toLocaleString("es-AR", { maximumFractionDigits: 2 })}%` : "—");
 // Día de hoy en Argentina (UTC-3), corrido la cantidad de días indicada.
 const diaAR = (dias = 0) => new Date(Date.now() - 3 * 60 * 60 * 1000 + dias * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 const fechaCorta = (dia) => dia.split("-").reverse().slice(0, 2).join("/");
@@ -192,7 +192,7 @@ function CrossSellingPorCanal({ local, online }) {
       <tbody>
         {canales.map((c) => <tr key={c.nombre}><td>{c.nombre}</td><td className="num">{c.ventas}</td><td className="num">{c.con} ({pct(c.con, c.ventas)})</td>
           <td className="num">{pesos(c.vendido)}</td><td className="num">{pct(c.vendido, c.facturado)}</td></tr>)}
-        {o && <tr><td><b>Total</b></td><td className="num"><b>{total.ventas}</b></td><td className="num"><b>{total.con}</b></td>
+        {o && <tr><td><b>Total</b></td><td className="num"><b>{total.ventas}</b></td><td className="num"><b>{total.con} ({pct(total.con, total.ventas)})</b></td>
           <td className="num"><b>{pesos(total.vendido)}</b></td><td className="num"><b>{pct(total.vendido, total.facturado)}</b></td></tr>}
       </tbody>
     </table>
