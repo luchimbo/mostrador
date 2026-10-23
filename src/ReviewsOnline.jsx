@@ -38,6 +38,9 @@ export default function ReviewsOnline({ productos }) {
     if (confirm(q)) run(() => api("/resenas/modulo", { method: "PUT", body: { enabled } }), enabled ? "Reseñas activadas en la tienda." : "Reseñas desactivadas en la tienda.");
   };
   const cambiar = (r, estado) => run(() => api(`/resenas/${r.id}`, { method: "PUT", body: { estado } }));
+  const configurarVista = (patch) => run(() => api("/resenas/visualizacion", { method: "PUT", body: {
+    minRating: data.minRating ?? 1, showMeliLink: data.showMeliLink ?? true, ...patch,
+  } }), "Opciones guardadas y publicadas en la tienda.");
   const borrar = (r) => confirm(`¿Borrar la opinión de ${r.autor}?`) && run(() => api(`/resenas/${r.id}`, { method: "DELETE" }));
   const agregar = (e) => {
     e.preventDefault();
@@ -76,6 +79,16 @@ export default function ReviewsOnline({ productos }) {
           <b>Activo en la tienda online</b>
         </label>
       </div>
+      <div className="filtros-resenas">
+        <label>Opiniones que se muestran<select value={data.minRating ?? 1} disabled={busy || !data.configured}
+          onChange={(e) => configurarVista({ minRating: Number(e.target.value) })}>
+          <option value={1}>Todas las estrellas</option>
+          <option value={4}>Solo 4 y 5 estrellas</option>
+        </select></label>
+        <label className="check"><input type="checkbox" checked={data.showMeliLink ?? true} disabled={busy || !data.configured}
+          onChange={(e) => configurarVista({ showMeliLink: e.target.checked })} />Mostrar enlace a Mercado Libre en la tienda</label>
+      </div>
+      <p className="nota-resenas">Estas opciones se guardan y publican al cambiarlas. El promedio y el total incluyen todas las opiniones aprobadas; el filtro solo cambia los comentarios visibles. Al ocultar el enlace, el origen MercadoLibre sigue visible y las opiniones se conservan.</p>
       <div className="acciones">
         <button disabled={busy || !data.configured} onClick={() => run(() => api("/resenas/publicar", { method: "POST" }), "Reseñas publicadas en la tienda online.")}>{busy ? "Procesando…" : "Publicar ahora"}</button>
         <button disabled={busy || importando || !data.configured} onClick={() => run(() => api("/resenas/mercadolibre", { method: "POST" }), "Búsqueda en MercadoLibre iniciada.")}>

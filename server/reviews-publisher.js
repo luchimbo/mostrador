@@ -3,7 +3,7 @@ import { buildReviewsSnapshot, normalizeReview, reviewKey } from "../shared/revi
 import { publicationSignature, snapshotRevision } from "../shared/publish-protocol.js";
 
 const DOCUMENT = "resenas.json";
-const defaults = { reviews: [], enabled: false, lastPublishedAt: null, lastRevision: null, error: null };
+const defaults = { reviews: [], enabled: false, minRating: 1, showMeliLink: true, lastPublishedAt: null, lastRevision: null, error: null };
 
 // Reseñas de productos: se cargan y moderan en Mostrador y se publican a Logitrack con la misma firma
 // que el cross-selling. «enabled» viaja dentro de la publicación: apagado, la tienda no muestra nada.
@@ -51,7 +51,8 @@ export function createReviewsPublisher({ connection, read, write, knownSkus = ()
     if (!configured) throw new Error("Configurá la conexión con Logitrack en el servidor");
     try {
       const s = state();
-      const snapshot = buildReviewsSnapshot({ storeId: connection.storeId, reviews: s.reviews, enabled: s.enabled, now: now() });
+      const snapshot = buildReviewsSnapshot({ storeId: connection.storeId, reviews: s.reviews, enabled: s.enabled,
+        minRating: s.minRating, showMeliLink: s.showMeliLink, now: now() });
       const revision = snapshotRevision(snapshot);
       const result = await request("PUT", JSON.stringify({ snapshot, revision }));
       if (result.revision !== revision) throw new Error("Logitrack no confirmó la versión publicada");
@@ -67,6 +68,11 @@ export function createReviewsPublisher({ connection, read, write, knownSkus = ()
   async function setEnabled(enabled) {
     if (typeof enabled !== "boolean") throw new Error("Indicá si el módulo queda activo o inactivo");
     await save({ enabled });
+    return publish();
+  }
+  async function setDisplayOptions({ minRating, showMeliLink }) {
+    if (![1, 4].includes(minRating) || typeof showMeliLink !== "boolean") throw new Error("Elegí todas las estrellas o desde 4, e indicá si se muestra el enlace a Mercado Libre");
+    await save({ minRating, showMeliLink });
     return publish();
   }
   // Opiniones de Mercado Libre: Logitrack las lee con la cuenta vinculada y entran ya aprobadas
@@ -138,5 +144,5 @@ export function createReviewsPublisher({ connection, read, write, knownSkus = ()
   }
   // Lo usa el botón: la búsqueda tarda minutos, así que corre aparte y la pantalla consulta el avance.
   function startImportMeli() { if (!importing) importMeli().catch(() => {}); return Boolean(importing); }
-  return { status, list, mutate, approvePending, publish, setEnabled, importMeli, startImportMeli, meliDue, remoteStatus: () => configured ? request("GET") : null };
+  return { status, list, mutate, approvePending, publish, setEnabled, setDisplayOptions, importMeli, startImportMeli, meliDue, remoteStatus: () => configured ? request("GET") : null };
 }

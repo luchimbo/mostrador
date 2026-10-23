@@ -408,6 +408,11 @@ app.put("/api/resenas/modulo", async (req, res) => {
   try { res.json(await reviewsPublisher.setEnabled(req.body.enabled)); }
   catch (err) { res.status(502).json({ error: err.message }); }
 });
+app.put("/api/resenas/visualizacion", async (req, res) => {
+  if (![1, 4].includes(req.body?.minRating) || typeof req.body?.showMeliLink !== "boolean") return res.status(400).json({ error: "Opciones de visualización inválidas." });
+  try { res.json(await reviewsPublisher.setDisplayOptions(req.body)); }
+  catch (err) { res.status(502).json({ error: err.message }); }
+});
 app.put("/api/resenas/:id", async (req, res) => {
   try {
     const updated = await reviewsPublisher.mutate((all) => {
