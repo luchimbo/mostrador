@@ -75,7 +75,7 @@ export function buildReviewsSnapshot({ storeId, reviews, enabled, minRating = 1,
       ...(r.enlace && (r.origen !== "mercadolibre" || showMeliLink) ? { enlace: r.enlace } : {}) });
   }
   for (const [code, p] of Object.entries(products)) {
-    if (!p.reviews.length) { delete products[code]; continue; }
+    if (!p.reviews.length || (minRating === 4 && p.sum / p.count < 4)) { delete products[code]; continue; }
     const newest = p.reviews.sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, MAX_PUBLISHED_PER_PRODUCT)
       .map((r) => ({ ...r, texto: r.texto.slice(0, SNAPSHOT_TEXT) }));
     products[code] = { avg: Math.round((p.sum / p.count) * 10) / 10, count: p.count, reviews: newest };

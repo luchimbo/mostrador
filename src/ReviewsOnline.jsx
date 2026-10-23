@@ -83,12 +83,12 @@ export default function ReviewsOnline({ productos }) {
         <label>Opiniones que se muestran<select value={data.minRating ?? 1} disabled={busy || !data.configured}
           onChange={(e) => configurarVista({ minRating: Number(e.target.value) })}>
           <option value={1}>Todas las estrellas</option>
-          <option value={4}>Solo 4 y 5 estrellas</option>
+          <option value={4}>Solo 4 y 5 estrellas (ocultar bloque si el promedio es menor a 4)</option>
         </select></label>
         <label className="check"><input type="checkbox" checked={data.showMeliLink ?? true} disabled={busy || !data.configured}
           onChange={(e) => configurarVista({ showMeliLink: e.target.checked })} />Mostrar enlace a Mercado Libre en la tienda</label>
       </div>
-      <p className="nota-resenas">Estas opciones se guardan y publican al cambiarlas. El promedio y el total incluyen todas las opiniones aprobadas; el filtro solo cambia los comentarios visibles. Al ocultar el enlace, el origen MercadoLibre sigue visible y las opiniones se conservan.</p>
+      <p className="nota-resenas">Estas opciones se guardan y publican al cambiarlas. El promedio y el total incluyen todas las opiniones aprobadas; con el filtro de 4 y 5 estrellas, si el promedio es menor a 4 se oculta todo el bloque y las estrellas del producto. Al ocultar el enlace, el origen MercadoLibre sigue visible y las opiniones se conservan.</p>
       <div className="acciones">
         <button disabled={busy || !data.configured} onClick={() => run(() => api("/resenas/publicar", { method: "POST" }), "Reseñas publicadas en la tienda online.")}>{busy ? "Procesando…" : "Publicar ahora"}</button>
         <button disabled={busy || importando || !data.configured} onClick={() => run(() => api("/resenas/mercadolibre", { method: "POST" }), "Búsqueda en MercadoLibre iniciada.")}>

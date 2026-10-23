@@ -50,17 +50,19 @@ test("el snapshot publica sólo las reseñas aprobadas, con promedio y la más n
 });
 
 test("filtra comentarios desde 4 estrellas sin alterar el promedio y permite ocultar sólo el enlace de ML", () => {
-  const reviews = [1, 3, 4, 5].map((rating) => ({ ...normalizeReview({ ...base, rating, enlace: "https://mercadolibre.com.ar/producto" }, { today }), estado: "publicada" }));
+  const reviews = [3, 4, 4, 5].map((rating) => ({ ...normalizeReview({ ...base, rating, enlace: "https://mercadolibre.com.ar/producto" }, { today }), estado: "publicada" }));
   reviews.push({ ...reviews[0], sku: "BAJO" });
+  reviews.push({ ...reviews[0], sku: "MIXTO", rating: 1 }, { ...reviews[0], sku: "MIXTO", rating: 5 });
   reviews.push({ ...reviews[3], origen: "google", enlace: "https://google.com/review" });
   const snap = buildReviewsSnapshot({ storeId: "78394", reviews, enabled: true, minRating: 4, showMeliLink: false });
   const p = snap.products.MD10D;
-  assert.deepEqual(p.reviews.map((r) => r.rating), [4, 5, 5]);
+  assert.deepEqual(p.reviews.map((r) => r.rating), [4, 4, 5, 5]);
+  assert.equal(snap.products.MIXTO, undefined);
   assert.equal(p.count, 5);
-  assert.equal(p.avg, 3.6);
+  assert.equal(p.avg, 4.2);
   assert.equal(snap.products.BAJO, undefined);
   assert.ok(p.reviews.filter((r) => r.origen === "mercadolibre").every((r) => !r.enlace));
-  assert.equal(p.reviews[2].enlace, "https://google.com/review");
+  assert.equal(p.reviews[3].enlace, "https://google.com/review");
   const original = buildReviewsSnapshot({ storeId: "78394", reviews, enabled: true });
   assert.equal(original.products.MD10D.reviews.length, 5);
   assert.equal(original.products.MD10D.reviews[0].enlace, reviews[0].enlace);
