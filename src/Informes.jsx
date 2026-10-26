@@ -37,6 +37,7 @@ export default function Informes() {
   const [dia, setDia] = useState(null);
   const [online, setOnline] = useState(null);
   const [todos, setTodos] = useState({});
+  const [canal, setCanal] = useState("todos");
   useEffect(() => {
     setError(null); setDia(null); setOnline(null); setPrevio(null);
     api(`/estadisticas?${new URLSearchParams({ desde, hasta })}`).then(setDatos).catch((err) => setError(err.message));
@@ -62,12 +63,23 @@ export default function Informes() {
     </div>
     {error && <p className="aviso error">{error}</p>}
     {!datos ? <p>Cargando…</p> : <>
-      <Kpis items={[
-        { etiqueta: "Facturado", valor: pesos(datos.facturado), detalle: variacion(datos.facturado, previo?.facturado) },
-        { etiqueta: "Ventas", valor: datos.ventas, detalle: variacion(datos.ventas, previo?.ventas) },
-        { etiqueta: "Ticket promedio", valor: pesos(datos.ticketPromedio) },
-        { etiqueta: "Vendido por cross-selling", valor: pesos(datos.agregados), detalle: `${pct(datos.agregados, datos.facturado)} de lo facturado` },
-      ]} />
+      <Segmentos etiqueta="Canal" valor={canal} onCambiar={setCanal} opciones={[["todos", "Todos"], ["mostrador", "Mostrador"], ["online", "Online"]]} />
+      {(() => {
+        const o = online?.datos;
+        const onlineListo = Boolean(o);
+        const m = { facturado: datos.facturado, ventas: datos.ventas, cross: datos.agregados };
+        const on = { facturado: o?.total || 0, ventas: o?.orders || 0, cross: o?.crossSellingRevenue || 0 };
+        const v = canal === "mostrador" ? m : canal === "online" ? on
+          : { facturado: m.facturado + on.facturado, ventas: m.ventas + on.ventas, cross: m.cross + on.cross };
+        const desglose = (f, fmt = (n) => n) => canal === "todos" ? `Mostrador ${fmt(f(m))} · Online ${onlineListo ? fmt(f(on)) : "sin datos"}` : null;
+        const aviso = canal !== "mostrador" && !onlineListo ? "Tienda online sin datos" : null;
+        return <Kpis items={[
+          { etiqueta: "Facturado", valor: pesos(v.facturado), detalle: desglose((x) => x.facturado, pesos) || aviso || (canal === "mostrador" ? variacion(datos.facturado, previo?.facturado) : null) },
+          { etiqueta: "Ventas", valor: v.ventas, detalle: desglose((x) => x.ventas) || aviso || (canal === "mostrador" ? variacion(datos.ventas, previo?.ventas) : null) },
+          { etiqueta: "Ticket promedio", valor: pesos(v.ventas ? v.facturado / v.ventas : 0) },
+          { etiqueta: "Vendido por cross-selling", valor: pesos(v.cross), detalle: `${pct(v.cross, v.facturado)} de lo facturado` },
+        ]} />;
+      })()}
 
       {datos.ventas > 0 && <div className="informes-panel">
         <h3>Facturado por día <span className="metrica">{dia ? `${fechaCorta(dia.dia)}: ${pesos(dia.total)} en ${dia.ventas} ${dia.ventas === 1 ? "venta" : "ventas"}` : `Pasá el mouse por una barra. Día más alto: ${pesos(maxDia)}.`}</span></h3>
