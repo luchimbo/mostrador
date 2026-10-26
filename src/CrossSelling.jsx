@@ -158,8 +158,8 @@ export default function CrossSelling({ productos, porId }) {
               {r.disparador.valor && !cs.length && <Pildora tipo="aviso">Sin coincidencias</Pildora>}
               <small>{resumenDisparador(r.disparador, porId)}{r.disparador.valor && ` · ${cs.length} productos`} → {r.sugeridos.length} sugeridos al {r.descuentoPct}%</small>
             </button>
-            <span className="num">{m ? `${m.aceptadas}/${m.mostradas}` : "—"}</span>
-            <span className="num">{o ? `${o.accepted}/${o.shown}` : metricasOnline ? "0/0" : "—"}</span>
+            <span className="num" title="Ventas completadas con esta regla en el mostrador">{m ? (m.ventas ?? 0) : "—"}</span>
+            <span className="num" title="Ventas completadas con esta regla en la tienda online">{o ? (o.sold ?? 0) : metricasOnline ? 0 : "—"}</span>
             <span className="num">{m || o ? pesos(vendido(r)) : "—"}</span>
             <button className="quitar-regla" aria-label={`Quitar la regla ${r.nombre}`} title="Quitar regla" onClick={() => quitar(r)}>×</button>
           </div>
@@ -167,7 +167,7 @@ export default function CrossSelling({ productos, porId }) {
         </div>;
       })}
     </div>
-    <p className="metrica">Mostrador y Online: aceptadas / mostradas. El orden guardado define qué regla tiene prioridad si dos sugieren lo mismo.</p>
+    <p className="metrica">Mostrador y Online: ventas completadas con la regla. El orden guardado define qué regla tiene prioridad si dos sugieren lo mismo.</p>
 
     <BarraCambios pendiente={sinGuardar} ocupado={ocupado} onClick={guardar} boton="Guardar cambios"
       texto={`Hay cambios sin guardar${st?.configured && moduloActivo ? " · al guardar se publican también en la tienda online" : ""}`} />
@@ -219,7 +219,7 @@ function EditorRegla({ r, cs, productos, porId, rubros, subrubros, cambiar, m, o
       <textarea rows="2" placeholder="¿Tenés la funda para protegerlo y transportarlo?" value={r.mensaje || ""} onChange={(e) => cambiar({ mensaje: e.target.value })} />
     </label>
     {(m || o) && <p className="metrica">
-      {m && <>Mostrador: mostrada {m.mostradas} veces · aceptada {m.aceptadas}{tasa(m.aceptadas, m.mostradas)} · vendido {pesos(m.ingresos)}</>}
+      {m && <>Mostrador: mostrada {m.mostradas} veces · aceptada {m.aceptadas}{tasa(m.aceptadas, m.mostradas)} · {m.ventas ?? 0} ventas completadas · vendido {pesos(m.ingresos)}</>}
       {m && o && <br />}
       {o && <>Online: mostrada {o.shown} veces · aceptada {o.accepted}{tasa(o.accepted, o.shown)} · vendida {o.sold} · vendido {pesos(o.revenue)}</>}
     </p>}

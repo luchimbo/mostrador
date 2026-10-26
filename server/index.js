@@ -515,18 +515,21 @@ app.get("/api/opinion/qr", async (_req, res) => {
 app.get("/api/metricas", async (_req, res) => {
   const ventas = (await readLog("ventas.jsonl")).filter((v) => !v.prueba || config.facturacionSimulada);
   const porRegla = {};
-  for (const regla of reglas) porRegla[regla.id] = { nombre: regla.nombre, mostradas: 0, aceptadas: 0, ingresos: 0 };
+  for (const regla of reglas) porRegla[regla.id] = { nombre: regla.nombre, mostradas: 0, aceptadas: 0, ventas: 0, ingresos: 0 };
   for (const v of ventas) {
     for (const key of v.sugerenciasMostradas || []) {
       const [reglaId] = key.split(":");
       if (porRegla[reglaId]) porRegla[reglaId].mostradas++;
     }
+    const reglasDeLaVenta = new Set();
     for (const l of v.lineas) {
       if (l.reglaId && porRegla[l.reglaId]) {
         porRegla[l.reglaId].aceptadas++;
         porRegla[l.reglaId].ingresos += l.total;
+        reglasDeLaVenta.add(l.reglaId);
       }
     }
+    for (const id of reglasDeLaVenta) porRegla[id].ventas++;
   }
   res.json({
     ventas: ventas.length,

@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { buildReviewsSnapshot, normalizeReview, reviewKey } from "../shared/reviews.js";
 import { publicationSignature, snapshotRevision } from "../shared/publish-protocol.js";
+import { responseJson } from "../shared/http-json.js";
 
 const DOCUMENT = "resenas.json";
 const defaults = { reviews: [], enabled: false, minRating: 1, showMeliLink: true, lastPublishedAt: null, lastRevision: null, error: null };
@@ -52,11 +53,7 @@ export function createReviewsPublisher({ connection, read, write, knownSkus = ()
     const response = await fetchImpl(url, { method, body: method === "GET" ? undefined : body, redirect: "error", signal: AbortSignal.timeout(timeout),
       headers: { "Content-Type": "application/json", "x-mostrador-timestamp": timestamp,
         "x-mostrador-signature": publicationSignature({ key: connection.key, method, path, timestamp, body }) } });
-    if (!response.ok) {
-      const detail = await response.json().then((b) => b?.error).catch(() => null);
-      throw new Error(`${detail || "Logitrack no pudo procesar las reseñas"} (HTTP ${response.status})`);
-    }
-    return response.json();
+    return responseJson(response, "Logitrack");
   }
   async function publishOnce() {
     if (!configured) throw new Error("Configurá la conexión con Logitrack en el servidor");
