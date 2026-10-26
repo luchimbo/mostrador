@@ -61,6 +61,13 @@ test("sugerencias y descuento atado al producto que lo disparó", () => {
   assert.equal(snap.lines[0].descuentoPct, 0);
 });
 
+test("con el cross-selling del mostrador apagado no hay sugerencias", () => {
+  const sale = new Sale();
+  sale.agregar(porId.get("101"));
+  assert.equal(sale.snapshot(porId, REGLAS_DEMO, { ...settings, crossSellingMostrador: false }).sugerencias.length, 0);
+  assert.ok(sale.snapshot(porId, REGLAS_DEMO, settings).sugerencias.length > 0);
+});
+
 test("comprobante: precios netos y bonificación combinada", () => {
   const lines = [{ productId: "901", codigo: "X", nombre: "Pedal", precioFinal: 24200, iva: 21, cantidad: 1, descuentoPct: 10 }];
   const totales = calcularTotales(lines, "transferencia", settings);

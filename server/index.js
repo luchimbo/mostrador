@@ -157,7 +157,7 @@ function estado() {
       segundosPorVideo: settings.segundosPorVideo,
       productosEntreVideos: settings.productosEntreVideos,
     },
-    opinionUrl: settings.opinionUrl,
+    opinionUrl: settings.mostrarOpinion ? settings.opinionUrl : "",
     catalogo: {
       cantidad: productsById.size,
       actualizado: catalogo.actualizado,
@@ -356,7 +356,8 @@ app.post("/api/tienda/actualizar", async (_req, res) => {
   await actualizarTienda({ completa: true });
   res.json({ ok: !errorTienda, error: errorTienda, ...estadoTienda() });
 });
-app.get("/api/tienda/faltantes", (_req, res) => res.json(tiendaSinContabilium(catalogo.productos)));
+app.get("/api/tienda/estado", (_req, res) => res.json({ ...estadoTienda(), error: errorTienda }));
+app.get("/api/tienda/faltantes",(_req, res) => res.json(tiendaSinContabilium(catalogo.productos)));
 
 app.get("/api/reglas", (_req, res) => res.json(reglas));
 app.get("/api/crossselling-online", (_req, res) => res.json(onlinePublisher.status()));
@@ -383,7 +384,7 @@ const reseniaError = (res, err) => res.status(400).json({ error: err.message });
 // Hay miles de opiniones: la lista se filtra en el servidor y devuelve sólo la primera tanda.
 const sinTildes = (v) => String(v || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 app.get("/api/resenas", (req, res) => {
-  const estado = String(req.query.estado || ""), tokens = sinTildes(req.query.q).split(/s+/).filter(Boolean);
+  const estado = String(req.query.estado || ""), tokens = sinTildes(req.query.q).split(/\s+/).filter(Boolean);
   const limite = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
   const nombres = new Map([...productsById.values()].map((p) => [String(p.codigo || "").trim().toUpperCase(), p.nombre]));
   const coinciden = reviewsPublisher.list().filter((r) => (!estado || r.estado === estado) &&
@@ -406,6 +407,11 @@ app.post("/api/resenas", async (req, res) => {
 app.put("/api/resenas/modulo", async (req, res) => {
   if (typeof req.body?.enabled !== "boolean") return res.status(400).json({ error: "Indicá enabled: true o false." });
   try { res.json(await reviewsPublisher.setEnabled(req.body.enabled)); }
+  catch (err) { res.status(502).json({ error: err.message }); }
+});
+app.put("/api/resenas/visualizacion", async (req, res) => {
+  if (![1, 4].includes(req.body?.minRating) || typeof req.body?.showMeliLink !== "boolean") return res.status(400).json({ error: "Opciones de visualización inválidas." });
+  try { res.json(await reviewsPublisher.setDisplayOptions(req.body)); }
   catch (err) { res.status(502).json({ error: err.message }); }
 });
 app.put("/api/resenas/:id", async (req, res) => {

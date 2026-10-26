@@ -65,15 +65,17 @@ export function importCsv(text, opts) {
 // Misma reseña (producto, autor, fecha y texto): no se vuelve a cargar.
 export const reviewKey = (r) => [r.sku, r.autor, r.fecha, r.texto].map((x) => String(x).toLowerCase()).join("|");
 
-export function buildReviewsSnapshot({ storeId, reviews, enabled, now = new Date() }) {
+export function buildReviewsSnapshot({ storeId, reviews, enabled, minRating = 1, showMeliLink = true, now = new Date() }) {
   const products = {};
   for (const r of reviews) {
     if (r.estado !== "publicada") continue;
     const p = products[r.sku] ||= { sum: 0, count: 0, reviews: [] };
     p.sum += r.rating; p.count++;
-    p.reviews.push({ rating: r.rating, autor: r.autor, texto: r.texto, fecha: r.fecha, origen: r.origen, ...(r.enlace ? { enlace: r.enlace } : {}) });
+    if (r.rating >= minRating) p.reviews.push({ rating: r.rating, autor: r.autor, texto: r.texto, fecha: r.fecha, origen: r.origen,
+      ...(r.enlace && (r.origen !== "mercadolibre" || showMeliLink) ? { enlace: r.enlace } : {}) });
   }
   for (const [code, p] of Object.entries(products)) {
+    if (!p.reviews.length || (minRating === 4 && p.sum / p.count < 4)) { delete products[code]; continue; }
     const newest = p.reviews.sort((a, b) => b.fecha.localeCompare(a.fecha)).slice(0, MAX_PUBLISHED_PER_PRODUCT)
       .map((r) => ({ ...r, texto: r.texto.slice(0, SNAPSHOT_TEXT) }));
     products[code] = { avg: Math.round((p.sum / p.count) * 10) / 10, count: p.count, reviews: newest };

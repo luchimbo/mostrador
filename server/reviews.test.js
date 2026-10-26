@@ -49,6 +49,44 @@ test("el snapshot publica sólo las reseñas aprobadas, con promedio y la más n
   assert.throws(() => validateReviewsSnapshot({ ...snap, products: { A1: { ...snap.products.A1, count: 1 } } }), /inválidas/);
 });
 
+test("filtra comentarios desde 4 estrellas sin alterar el promedio y permite ocultar sólo el enlace de ML", () => {
+  const reviews = [3, 4, 4, 5].map((rating) => ({ ...normalizeReview({ ...base, rating, enlace: "https://mercadolibre.com.ar/producto" }, { today }), estado: "publicada" }));
+  reviews.push({ ...reviews[0], sku: "BAJO" });
+  reviews.push({ ...reviews[0], sku: "MIXTO", rating: 1 }, { ...reviews[0], sku: "MIXTO", rating: 5 });
+  reviews.push({ ...reviews[3], origen: "google", enlace: "https://google.com/review" });
+  const snap = buildReviewsSnapshot({ storeId: "78394", reviews, enabled: true, minRating: 4, showMeliLink: false });
+  const p = snap.products.MD10D;
+  assert.deepEqual(p.reviews.map((r) => r.rating), [4, 4, 5, 5]);
+  assert.equal(snap.products.MIXTO, undefined);
+  assert.equal(p.count, 5);
+  assert.equal(p.avg, 4.2);
+  assert.equal(snap.products.BAJO, undefined);
+  assert.ok(p.reviews.filter((r) => r.origen === "mercadolibre").every((r) => !r.enlace));
+  assert.equal(p.reviews[3].enlace, "https://google.com/review");
+  const original = buildReviewsSnapshot({ storeId: "78394", reviews, enabled: true });
+  assert.equal(original.products.MD10D.reviews.length, 5);
+  assert.equal(original.products.MD10D.reviews[0].enlace, reviews[0].enlace);
+});
+
+test("las opciones se guardan, se publican y se conservan al recrear el publicador", async () => {
+  let doc = { reviews: [{ ...normalizeReview({ ...base, enlace: "https://mercadolibre.com.ar/producto" }, { today }), estado: "publicada" }] };
+  const sent = [];
+  const options = { connection: { url: "https://logitrack.test", key: "k".repeat(40), storeId: "78394" },
+    read: () => doc, write: async (_n, v) => { doc = v; }, fetchImpl: async (_url, init) => {
+      const { snapshot, revision } = JSON.parse(init.body); sent.push(snapshot);
+      return { ok: true, json: async () => ({ revision }) };
+    } };
+  const publisher = createReviewsPublisher(options);
+  await assert.rejects(publisher.setDisplayOptions({ minRating: 3, showMeliLink: false }));
+  await publisher.setDisplayOptions({ minRating: 4, showMeliLink: false });
+  assert.equal(sent[0].products.MD10D.reviews[0].enlace, undefined);
+  const restored = createReviewsPublisher(options);
+  assert.equal(restored.status().minRating, 4);
+  assert.equal(restored.status().showMeliLink, false);
+  await restored.setDisplayOptions({ minRating: 1, showMeliLink: true });
+  assert.equal(sent[1].products.MD10D.reviews[0].enlace, doc.reviews[0].enlace);
+});
+
 test("el publicador firma la publicación y lleva el interruptor dentro del snapshot", async () => {
   let doc = { reviews: [{ ...normalizeReview(base, { today }), id: "1", estado: "publicada" }] };
   const key = "k".repeat(40), sent = [];

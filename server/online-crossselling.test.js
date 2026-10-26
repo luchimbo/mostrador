@@ -33,6 +33,27 @@ test("online y mostrador comparten disparadores, orden y descuentos", () => {
     assert.deepEqual(actual.map((s) => [s.productId, s.reglaId, s.precioConDescuento]), expected.map((s) => [s.productId, s.reglaId, s.precioConDescuento]));
   }
 });
+
+test("online conserva la categoría de MD10D al publicar y vincular las variantes", () => {
+  const battery = { ...products[0], nombre: "Kit de Batería Elctrónica MIDIPLUS MD10D",
+    codigo: "MOI002", rubro: "Baterías Electrónicas", subrubro: "Baterías Electrónicas › Baterías" };
+  const list = structuredClone(tnProducts);
+  list[0].name = { es: "MIDIPLUS MD10D" }; // La categoría no depende del nombre online.
+  list[0].variants[0].sku = battery.codigo;
+  for (const disparador of [
+    { tipo: "rubro", valor: "Baterías Electrónicas" },
+    { tipo: "subrubro", valor: "Baterías Electrónicas › Baterías" },
+  ]) {
+    const snapshot = JSON.parse(JSON.stringify(make({ products: [battery, ...products.slice(1)],
+      rules: [{ ...rules[0], disparador }] })));
+    const catalog = mapOnlineCatalog(snapshot, list);
+    assert.equal(catalog.byVariant.get("100").rubro, battery.rubro);
+    assert.deepEqual(onlineRecommendations(snapshot, catalog, cart).map((s) => s.productId), ["2", "3"]);
+    const other = structuredClone(snapshot);
+    other.rules[0].disparador.valor = "Otra categoría";
+    assert.deepEqual(onlineRecommendations(other, mapOnlineCatalog(other, list), cart), []);
+  }
+});
 test("no ofrece excluidos por nombre, accesorios presentes ni más que el máximo", () => {
   const snapshot = make({ settings: { ...settings, maxSugerencias: 1 } });
   let catalog = mapOnlineCatalog(snapshot, tnProducts);
