@@ -72,6 +72,7 @@ export const DEFAULT_SETTINGS = {
   descuentoMaximoPct: 25, // tope para cualquier descuento de recomendación
   margenMinimoPct: 10, // el precio con descuento nunca baja de costo + este %
   maxSugerencias: 3,
+  crossSellingMostrador: true, // apagado, la venta del mostrador no ofrece sugerencias
   segundosPorSlide: 10,
   modoReposo: "ofertas",
   segundosPorVideo: 30,
@@ -79,6 +80,7 @@ export const DEFAULT_SETTINGS = {
   videosReposo: [],
   excluidosReposo: [],
   opinionUrl: REVIEW_URL,
+  mostrarOpinion: true, // apagado, no aparece el QR de opinión aunque haya enlace
 };
 
 export function getSettings() {
@@ -87,6 +89,7 @@ export function getSettings() {
 
 export async function saveSettings(partial) {
   const next = { ...getSettings(), ...partial };
+  if (typeof next.crossSellingMostrador !== "boolean" || typeof next.mostrarOpinion !== "boolean") throw new Error("Los interruptores de ajustes no son válidos.");
   validarPantalla(next);
   await writeJson("ajustes.json", next);
   return next;

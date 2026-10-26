@@ -21,9 +21,20 @@ export function createReviewsPublisher({ connection, read, write, knownSkus = ()
   function status() {
     const { reviews, ...rest } = state();
     const published = reviews.filter((r) => r.estado === "publicada");
+    // Hay cambios sin publicar si lo que se publicaría hoy no coincide con la última versión confirmada.
+    let sinPublicar = false;
+    if (configured) {
+      try {
+        // Sin ninguna publicación previa, sólo hay algo que publicar si ya se cargaron opiniones o se activó el módulo.
+        sinPublicar = rest.lastRevision ? snapshotRevision(buildReviewsSnapshot({ storeId: connection.storeId, reviews, enabled: rest.enabled,
+          minRating: rest.minRating, showMeliLink: rest.showMeliLink, now: now() })) !== rest.lastRevision : reviews.length > 0 || rest.enabled;
+      } catch { sinPublicar = true; }
+    }
     return { ...rest, configured, storeId: connection.storeId || null, total: reviews.length,
       pendientes: reviews.filter((r) => r.estado === "pendiente").length, publicadas: published.length,
-      productos: new Set(published.map((r) => r.sku)).size, importando: Boolean(importing) };
+      ocultas: reviews.filter((r) => r.estado === "oculta").length,
+      promedio: published.length ? Math.round((published.reduce((s, r) => s + r.rating, 0) / published.length) * 10) / 10 : null,
+      productos: new Set(published.map((r) => r.sku)).size, importando: Boolean(importing), sinPublicar };
   }
   const list = () => state().reviews;
   // Aprueba en bloque lo pendiente (opcionalmente sólo de un origen).

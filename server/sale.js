@@ -121,7 +121,7 @@ export class Sale {
   snapshot(productsById, reglas, settings) {
     this.recalcular(productsById, reglas, settings);
     const sugerencias =
-      this.fase === "venta" ? obtenerSugerencias(this.lines, productsById, reglas, settings) : [];
+      this.fase === "venta" && settings.crossSellingMostrador !== false ? obtenerSugerencias(this.lines, productsById, reglas, settings) : [];
     for (const s of sugerencias) this.sugerenciasMostradas.add(`${s.reglaId}:${s.productId}`);
     return {
       fase: this.fase,
