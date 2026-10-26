@@ -1,5 +1,15 @@
 # Reseñas de productos en la tienda online
 
+## Corrección verificada el 26/10/2026
+
+- El dominio activo de Mostrador es `https://mostrador.cafishia.com` (servicio de usuario `mostrador.service` en `pcmidi`, carpeta `~/mostrador-server/app`); Railway conserva una instalación diferente. No usar Railway para comprobar los datos de esta tienda.
+- Se reprodujo el 401 de Clerk en `/api/reviews/config` de GeoModi, mientras una consulta HMAC a cross-selling respondía 200 con la misma clave. La fuente ya tenía las excepciones del proxy: faltaba distribuirlas. Se publicó Logitrack mediante `deploy:production`, despliegue `dpl_5kDYU58cWxY4MFYjM3uDJaZair6D`, con controles antes de promover. El control ahora incluye `/api/reviews/config` y `/api/reviews/meli` y detecta el 401 de Clerk.
+- Se actualizó y reinició Mostrador, se agregó manejo de respuestas HTML/JSON inválidas y se publicó la configuración guardada. Copia previa de los archivos modificados y la interfaz: `~/mostrador-server/backups/resenas-fix-20261026.tar.gz`. No se reemplazaron datos ni credenciales.
+- Verificación real: consulta HMAC de reseñas 200; publicación desde la pantalla correcta; guardar las opciones actuales 200, `error: null` y `sinPublicar: false`. Se mantienen `minRating: 4` y `showMeliLink: false`. Storefront para ZTO115: 200, activo, 253 opiniones, promedio 5, 25 comentarios y ningún enlace a Mercado Libre. No se inició una importación nueva.
+- Pruebas: Mostrador 121 aprobadas y 1 omitida; GeoModi 160 aprobadas; compilaciones correctas. [Pantalla verificada](resenas-corregidas-20261026.png).
+
+El contenido siguiente conserva el historial inicial de implementación.
+
 Estado: **implementado y probado en local, sin desplegar ni activar**. Tiendanube no tiene reseñas propias ni un endpoint de reviews en su API; las apps del rubro (Trusty, Lily Reviews, Avalia, MeuReview) hacen lo mismo que acá: un script en la tienda que lee de un backend propio.
 
 ## Criterio
