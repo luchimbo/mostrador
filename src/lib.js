@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
+import { responseJson } from "../shared/http-json.js";
 
 // main.jsx lo conecta una vez que hay sesión iniciada.
 export const socket = io({ autoConnect: false, auth: {
@@ -60,7 +61,5 @@ export async function api(ruta, opciones = {}) {
     body: opciones.body ? JSON.stringify(opciones.body) : undefined,
   });
   if (res.status === 401) window.location.reload();
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || "Error del servidor");
-  return data;
+  return responseJson(res);
 }
