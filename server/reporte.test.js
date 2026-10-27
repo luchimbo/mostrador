@@ -77,6 +77,14 @@ test("Estadísticas: resumen, días, medios, productos y cross-selling", () => {
   assert.equal(estadisticas([venta], { desde: "2026-10-09T03:00:00.000Z" }).ventas, 0);
 });
 
+test("Estadísticas: incluye todos los productos vendidos aunque haya más de quince", () => {
+  const lineas = Array.from({ length: 20 }, (_, i) => ({ productId: String(i), nombre: `Producto ${i}`, cantidad: 1, total: 100, crossSelling: false }));
+  const e = estadisticas([{ ...venta, lineas, total: 1800 }]);
+  assert.equal(e.productos.length, 20);
+  assert.equal(e.productos.reduce((total, p) => total + p.total, 0), 1800);
+  assert.equal(e.cruzados.length, 0);
+});
+
 test("Estadísticas: es cross-selling todo lo que no es el producto principal, venga o no de una recomendación", () => {
   const lineas = [venta.lineas[0], { ...venta.lineas[1], reglaId: null }, { productId: "3", nombre: "Funda", cantidad: 1, total: 30000, reglaId: null }];
   const e = estadisticas([{ ...venta, total: 330000, lineas }]);

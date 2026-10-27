@@ -552,6 +552,8 @@ button.enlace { border: 0; background: none; padding: 0; color: var(--acento); f
 .canales-informe > div { display: flex; flex-direction: column; gap: 2px; }
 .canales-informe b { font-size: 1.4em; }
 .detalle-cruzados { margin-top: 12px; }
+.productos-vendidos-tabla { overflow-x: auto; }
+.productos-vendidos-tabla td:first-child { white-space: normal; min-width: 240px; }
 .detalle-cruzados summary { cursor: pointer; color: var(--gris); font-size: 0.9em; }
 .barra-h { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; font-size: 0.9em; margin-bottom: 10px; }
 .barra-h > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -108,7 +108,7 @@ export function estadisticas(ventas, { desde, hasta } = {}) {
     conAgregado,
     porDia,
     porMedio: [...medios].map(([medio, m]) => redondear({ medio, ...m })).sort((a, b) => b.total - a.total),
-    productos: [...productos.values()].map(redondear).sort((a, b) => b.total - a.total).slice(0, 15),
+    productos: [...productos.values()].map(redondear).sort((a, b) => b.total - a.total),
     cruzados: [...cruzados.values()].map(redondear).sort((a, b) => b.total - a.total),
   };
 }

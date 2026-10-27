@@ -93,6 +93,18 @@ export default function Informes() {
 
       <CrossSellingPorCanal local={datos} online={online} />
 
+      <div className="informes-panel">
+        <h3>Productos vendidos{canal !== "online" ? " (mostrador)" : " (online)"}</h3>
+        {canal !== "online" && <>
+          <p className="metrica">Todos los productos del período, incluidos los agregados por cross-selling.</p>
+          {datos.productos.length ? <div className="productos-vendidos-tabla"><table>
+            <thead><tr><th>Producto</th><th className="num">Unidades</th><th className="num">Vendido</th></tr></thead>
+            <tbody>{datos.productos.map((p, i) => <tr key={i}><td>{p.nombre}</td><td className="num">{p.unidades}</td><td className="num">{pesos(p.total)}</td></tr>)}</tbody>
+          </table></div> : <p className="vacio">No hay productos vendidos en este período.</p>}
+        </>}
+        {canal !== "mostrador" && <p className="metrica">El informe de la tienda online solo envía los productos de cross-selling; el detalle de los demás productos online todavía no está disponible.</p>}
+      </div>
+
       {canal === "online" ? <p className="vacio">Medios de pago y más vendidos solo están disponibles para el mostrador.</p>
         : !datos.ventas ? <p className="vacio">No hay ventas del mostrador en este período.</p> : <div className="dos-columnas">
         <div className="informes-panel">
