@@ -34,13 +34,26 @@ const decodificar = (s) =>
 const ESPERAS_MS = [3000, 10000];
 const REINTENTABLES = [403, 429, 500, 502, 503, 504];
 
-async function texto(url) {
+export async function texto(url, { solicitar = fetch, esperar = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
   for (let intento = 0; ; intento++) {
-    const res = await fetch(url, { headers: { "User-Agent": UA } });
-    if (res.ok) return res.text();
+    let res;
+    try {
+      res = await solicitar(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(30_000) });
+      // También puede cortarse la conexión mientras se descarga el cuerpo.
+      if (res.ok) return await res.text();
+    } catch (err) {
+      const detalle = err.cause?.code || err.cause?.message || err.message;
+      if (intento >= ESPERAS_MS.length) {
+        throw new Error(`No se pudo leer la tienda tras ${intento + 1} intentos (${detalle}) en ${url}`, { cause: err });
+      }
+      console.warn(`[tiendanube] conexión: ${detalle} en ${url}; reintento ${intento + 1}`);
+      await esperar(ESPERAS_MS[intento]);
+      continue;
+    }
     if (!REINTENTABLES.includes(res.status) || intento >= ESPERAS_MS.length) throw new Error(`HTTP ${res.status} en ${url}`);
     const pedida = Number(res.headers.get("retry-after")) * 1000;
-    await new Promise((r) => setTimeout(r, Math.min(pedida || ESPERAS_MS[intento], 30_000)));
+    await res.body?.cancel();
+    await esperar(Math.min(pedida || ESPERAS_MS[intento], 30_000));
   }
 }
 
