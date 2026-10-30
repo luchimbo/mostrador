@@ -5,6 +5,10 @@ export const SOURCES = Object.freeze({ mercadolibre: "MercadoLibre", google: "Go
 export const MAX_PUBLISHED_PER_PRODUCT = 25;
 const SNAPSHOT_TEXT = 500;
 export const STATES = Object.freeze(["pendiente", "publicada", "oculta"]);
+// El orden estable conserva el orden de carga entre opiniones del mismo día.
+export function newestReviewsFirst(reviews) {
+  return [...reviews].sort((a, b) => String(b.fecha || "").localeCompare(String(a.fecha || "")));
+}
 const sku = (v) => String(v || "").trim().toUpperCase();
 const clip = (v, max) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 

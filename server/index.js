@@ -18,7 +18,7 @@ import { productosEnReposo } from "../shared/display.js";
 import { incluirProductosPrueba } from "./catalog.js";
 import { createOnlinePublisher } from "./online-publisher.js";
 import { createReviewsPublisher } from "./reviews-publisher.js";
-import { importCsv, normalizeReview, reviewKey } from "../shared/reviews.js";
+import { importCsv, newestReviewsFirst, normalizeReview, reviewKey } from "../shared/reviews.js";
 import { comprobanteEmitido, registrarCobranza } from "./cobranza.js";
 import { estadisticas, filasReporte, generarReporteExcel, sinProductosPrueba } from "./reporte.js";
 
@@ -390,7 +390,7 @@ app.get("/api/resenas", (req, res) => {
   const coinciden = reviewsPublisher.list().filter((r) => (!estado || r.estado === estado) &&
     (!tokens.length || tokens.every((t) => sinTildes(`${r.sku} ${nombres.get(r.sku) || ""} ${r.autor} ${r.texto}`).includes(t))));
   res.json({ ...reviewsPublisher.status(), coinciden: coinciden.length,
-    reviews: coinciden.slice(0, limite).map((r) => ({ ...r, producto: nombres.get(r.sku) || "" })) });
+    reviews: newestReviewsFirst(coinciden).slice(0, limite).map((r) => ({ ...r, producto: nombres.get(r.sku) || "" })) });
 });
 app.post("/api/resenas", async (req, res) => {
   try {

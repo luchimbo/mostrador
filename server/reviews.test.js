@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildReviewsSnapshot, importCsv, normalizeReview, parseCsv, reviewKey, validateReviewsSnapshot } from "../shared/reviews.js";
+import { buildReviewsSnapshot, importCsv, newestReviewsFirst, normalizeReview, parseCsv, reviewKey, validateReviewsSnapshot } from "../shared/reviews.js";
+
+test("las opiniones se ordenan por fecha antes de limitar y conservan empates", () => {
+  const reviews = [{ id: "vieja", fecha: "2024-01-01" }, { id: "primera", fecha: "2026-01-01" },
+    { id: "segunda", fecha: "2026-01-01" }, { id: "media", fecha: "2025-01-01" }];
+  assert.deepEqual(newestReviewsFirst(reviews).slice(0, 3).map((r) => r.id), ["primera", "segunda", "media"]);
+  assert.equal(reviews[0].id, "vieja");
+});
 import { verifyPublication } from "../shared/publish-protocol.js";
 import { createReviewsPublisher } from "./reviews-publisher.js";
 
