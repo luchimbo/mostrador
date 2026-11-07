@@ -116,40 +116,23 @@ function Venta({ estado }) {
         </ul>
         <div className="totales-cliente">
           {totales.descuentoRecomendaciones > 0 && (
-            <div className="ahorro">Ahorrás {pesos(totales.descuentoRecomendaciones + totales.descuentoContado - Math.min(totales.ajuste || 0, 0))}</div>
+            <div className="ahorro">Ahorrás {pesos(totales.descuentoRecomendaciones + totales.descuentoContado)}</div>
           )}
-          {totales.aplicaContado || totales.ajuste < 0 ? (
-            <>
-              {totales.aplicaContado && (
-                <div className="fila">
-                  <span>Descuento {estado.transferencia ? "transferencia" : estado.metodoPago} {totales.descuentoContadoPct}%</span>
-                  <span>−{pesos(totales.descuentoContado)}</span>
-                </div>
-              )}
-              {totales.ajuste < 0 && (
-                <div className="fila">
-                  <span>Redondeo</span>
-                  <span>−{pesos(-totales.ajuste)}</span>
-                </div>
-              )}
-              <div className="total">
-                <span>Total</span>
-                <span>{pesos(totales.totalAPagar)}</span>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="total">
-                <span>Total</span>
-                <span>{pesos(totales.total)}</span>
-              </div>
-              {!estado.metodoPago && (
-                <div className="fila contado">
-                  <span>En efectivo o transferencia</span>
-                  <span>{pesos(totales.totalContado)}</span>
-                </div>
-              )}
-            </>
+          {totales.aplicaContado && (
+            <div className="fila">
+              <span>Descuento {estado.transferencia ? "transferencia" : estado.metodoPago} {totales.descuentoContadoPct}%</span>
+              <span>−{pesos(totales.descuentoContado)}</span>
+            </div>
+          )}
+          <div className="total">
+            <span>Total</span>
+            <span>{pesos(totales.totalAPagar)}</span>
+          </div>
+          {!estado.metodoPago && (
+            <div className="fila contado">
+              <span>En efectivo o transferencia</span>
+              <span>{pesos(totales.totalContado)}</span>
+            </div>
           )}
         </div>
       </section>

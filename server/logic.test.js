@@ -71,7 +71,7 @@ test("con el cross-selling del mostrador apagado no hay sugerencias", () => {
 test("comprobante: precios netos y bonificación combinada", () => {
   const lines = [{ productId: "901", codigo: "X", nombre: "Pedal", precioFinal: 24200, iva: 21, cantidad: 1, descuentoPct: 10 }];
   const totales = calcularTotales(lines, "transferencia", settings);
-  const c = armarComprobante({ lines, metodoPago: "transferencia", totales, idCliente: 5, tipoFc: "FCB", settings });
+  const c = armarComprobante({ lines, metodoPago: "transferencia", idCliente: 5, tipoFc: "FCB", settings });
   assert.equal(c.Items[0].PrecioUnitario, 20000);
   assert.equal(c.Items[0].Bonificacion, 14.5);
   assert.equal(c.Pagos, null); // Emisi?n sin registrar cobro

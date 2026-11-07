@@ -221,7 +221,6 @@ async function accionFacturar(datosCliente) {
       url: res.url,
       cobranza: res.cobranza,
       total: res.total,
-      ajusteTotal: snapshot.totales.ajuste || 0,
       metodoPago: snapshot.metodoPago,
       transferencia: snapshot.metodoPago === "mercadopago" && snapshot.transferencia,
       tipo: res.tipo,
@@ -288,7 +287,6 @@ const ACCIONES = {
   metodoPago: ({ metodo }) => sale.setMetodoPago(metodo),
   sinFactura: ({ valor }) => sale.setSinFactura(valor),
   transferencia: ({ valor }) => sale.setTransferencia(valor),
-  ajustarTotal: ({ total }) => sale.ajustarTotal(total, getSettings()),
   cancelar: async () => {
     if (["facturando", "cobrando"].includes(sale.fase)) throw new Error("Esperá a que termine la operación en curso.");
     await writeJson("factura-en-cobranza.json", null);
@@ -306,7 +304,7 @@ io.on("connection", (socket) => {
     try {
       if (socket.handshake.auth.soloLectura) throw new Error("La vista de supervisión es de solo lectura.");
       if (!fn) throw new Error(`Acción desconocida: ${msg?.tipo}`);
-      if (["cantidad", "quitar", "crossSelling", "metodoPago", "sinFactura", "transferencia", "ajustarTotal"].includes(msg.tipo) && ["facturando", "cobranza", "cobrando"].includes(sale.fase)) throw new Error("Terminá la factura y cobranza antes de modificar la venta.");
+      if (["cantidad", "quitar", "crossSelling", "metodoPago", "sinFactura", "transferencia"].includes(msg.tipo) && ["facturando", "cobranza", "cobrando"].includes(sale.fase)) throw new Error("Terminá la factura y cobranza antes de modificar la venta.");
       const res = await fn(msg);
       ack({ ok: true, ...(res || {}) });
     } catch (err) {

@@ -76,14 +76,3 @@ export function calcularTotales(lines, metodoPago, settings, { transferencia = f
     totalAPagar: aplicaContado ? totalContado : total,
   };
 }
-
-// Total ajustado por el vendedor: se reparte entre las líneas en proporción a lo que
-// pagaría cada una (con descuentos). Los centavos que sobran van a la línea más grande.
-export function repartirTotal(lines, pctContado, total) {
-  const bases = lines.map((l) => calcularLinea(l).total * (1 - (pctContado || 0) / 100));
-  const suma = bases.reduce((a, b) => a + b, 0);
-  const partes = bases.map((b) => round2(suma ? (total * b) / suma : total / lines.length));
-  const mayor = bases.indexOf(Math.max(...bases));
-  partes[mayor] = round2(partes[mayor] + total - partes.reduce((a, b) => a + b, 0));
-  return partes;
-}

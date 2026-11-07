@@ -216,51 +216,9 @@ export function Totales({ totales }) {
           <span>−{pesos(totales.descuentoContado)}</span>
         </div>
       )}
-      {totales.ajuste ? (
-        <div className={totales.ajuste < 0 ? "descuento" : undefined}>
-          <span>Ajuste del vendedor</span>
-          <span>{totales.ajuste < 0 ? "−" : "+"}{pesos(Math.abs(totales.ajuste))}</span>
-        </div>
-      ) : null}
       <div className="total">
         <span>Total</span>
         <span>{pesos(totales.totalAPagar)}</span>
-      </div>
-    </div>
-  );
-}
-
-// Total final escrito por el vendedor (ej. redondear en efectivo). Puede ser menor o mayor que el de la venta.
-function AjusteTotal({ estado, bloqueado, ejecutar }) {
-  const [valor, setValor] = useState("");
-  const { totales } = estado;
-  const sinAjuste = totales.totalSinAjuste ?? totales.totalAPagar;
-  const redondeos = [1000, 10000].map((m) => Math.floor(sinAjuste / m) * m).filter((v, i, a) => v > 0 && v < sinAjuste && a.indexOf(v) === i);
-  async function aplicar(total) {
-    const res = await ejecutar("ajustarTotal", { total });
-    if (res.ok) setValor("");
-  }
-  const numero = Number(valor.replace(/\./g, "").replace(",", "."));
-  return (
-    <div className="ajuste-total">
-      <label>
-        Total a cobrar <small>Opcional: para redondear. Sin ajuste: {pesos(sinAjuste)}</small>
-      </label>
-      <div className="fila-ajuste">
-        <input
-          inputMode="decimal"
-          placeholder={String(sinAjuste)}
-          value={valor}
-          disabled={bloqueado}
-          onChange={(e) => setValor(e.target.value)}
-          // Enter aplica el ajuste; no factura.
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (numero > 0) aplicar(numero); } }}
-        />
-        <button type="button" disabled={bloqueado || !(numero > 0)} onClick={() => aplicar(numero)}>Aplicar</button>
-        {redondeos.map((v) => (
-          <button type="button" key={v} disabled={bloqueado} onClick={() => aplicar(v)}>{pesos(v)}</button>
-        ))}
-        {totales.ajuste ? <button type="button" className="secundario" disabled={bloqueado} onClick={() => aplicar(null)}>Quitar ajuste</button> : null}
       </div>
     </div>
   );
@@ -328,7 +286,6 @@ function Cobro({ estado, bloqueado, ejecutar }) {
           </div>
         </>
       )}
-      {estado.metodoPago && <AjusteTotal estado={estado} bloqueado={bloqueado} ejecutar={ejecutar} />}
       <label>
         DNI o CUIT{" "}
         <small>{documentoCompleto ? `(${tipo})` : sinFactura ? "Opcional sin factura" : "Obligatorio para facturar"}</small>

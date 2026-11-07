@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { armarComprobante } from "./invoice.js";
-import { repartirTotal } from "./pricing.js";
 import { Sale } from "./sale.js";
 import { DEFAULT_SETTINGS } from "./store.js";
 
@@ -18,49 +17,21 @@ function ventaEnEfectivo() {
   return sale;
 }
 
-test("Total ajustado: redondea el total a pagar y se borra al cambiar la venta", () => {
+test("El total y el comprobante usan los precios de catálogo y el descuento de contado", () => {
   const sale = ventaEnEfectivo();
-  const sinAjuste = sale.totales(settings).totalAPagar;
-  sale.ajustarTotal(320000, settings);
-  const t = sale.totales(settings);
-  assert.equal(t.totalAPagar, 320000);
-  assert.equal(t.totalSinAjuste, sinAjuste);
-  assert.equal(t.ajuste, Math.round((320000 - sinAjuste) * 100) / 100);
-  sale.cambiarCantidad(sale.lines[1].lineId, 1);
-  assert.equal(sale.totalAjustado, null);
-});
-
-test("Total ajustado: no puede ser cero", () => {
-  const sale = ventaEnEfectivo();
-  assert.throws(() => sale.ajustarTotal(0, settings), /válido/);
-  sale.ajustarTotal(320000, settings);
-  sale.ajustarTotal("", settings);
-  assert.equal(sale.totalAjustado, null);
-});
-
-test("Total ajustado: la factura suma exactamente el total escrito", () => {
-  const sale = ventaEnEfectivo();
-  sale.ajustarTotal(320000, settings);
   const snap = sale.snapshot(new Map(), [], settings);
-  assert.equal(repartirTotal(snap.lines, 5, 320000).reduce((a, b) => a + b, 0).toFixed(2), "320000.00");
-  const { Items } = armarComprobante({ lines: snap.lines, metodoPago: "efectivo", totales: snap.totales, idCliente: 1, tipoFc: "FCB", settings });
-  const total = Items.reduce((a, i) => a + i.Cantidad * i.PrecioUnitario * (1 + i.Iva / 100) * (1 - i.Bonificacion / 100), 0);
-  assert.ok(Math.abs(total - 320000) < 0.05, `total facturado ${total}`);
-  assert.ok(Items.every((i) => i.Bonificacion === 0));
-});
+  assert.equal(snap.totales.totalAPagar, 323456.77);
 
-test("Total ajustado: puede superar el total y la factura suma lo escrito", () => {
-  const sale = ventaEnEfectivo();
-  const sinAjuste = sale.totales(settings).totalAPagar;
-  sale.ajustarTotal(330000, settings);
-  const snap = sale.snapshot(new Map(), [], settings);
-  assert.ok(330000 > sinAjuste);
-  assert.equal(snap.totales.totalAPagar, 330000);
-  assert.equal(snap.totales.ajuste, Math.round((330000 - sinAjuste) * 100) / 100);
-  const { Items } = armarComprobante({ lines: snap.lines, metodoPago: "efectivo", totales: snap.totales, idCliente: 1, tipoFc: "FCB", settings });
-  const total = Items.reduce((a, i) => a + i.Cantidad * i.PrecioUnitario * (1 + i.Iva / 100) * (1 - i.Bonificacion / 100), 0);
-  assert.ok(Math.abs(total - 330000) < 0.05, `total facturado ${total}`);
-  assert.ok(Items.every((i) => i.Bonificacion === 0));
+  const { Items } = armarComprobante({
+    lines: snap.lines,
+    metodoPago: snap.metodoPago,
+    totales: { ajuste: -3456.77, totalAPagar: 320000 },
+    idCliente: 1,
+    tipoFc: "FCB",
+    settings,
+  });
+  assert.deepEqual(Items.map(i => i.PrecioUnitario), [260983.03, 11172.55]);
+  assert.ok(Items.every(i => i.Bonificacion === 5));
 });
 
 test("Transferencia por MercadoPago: condición MercadoPago con descuento de contado", () => {
@@ -74,7 +45,7 @@ test("Transferencia por MercadoPago: condición MercadoPago con descuento de con
   assert.equal(transferencia.aplicaContado, true);
   assert.equal(transferencia.totalAPagar, transferencia.totalContado);
   const snap = sale.snapshot(new Map(), [], settings);
-  const { Items, CondicionVenta } = armarComprobante({ lines: snap.lines, metodoPago: "mercadopago", transferencia: true, totales: snap.totales, idCliente: 1, tipoFc: "FCB", settings });
+  const { Items, CondicionVenta } = armarComprobante({ lines: snap.lines, metodoPago: "mercadopago", transferencia: true, idCliente: 1, tipoFc: "FCB", settings });
   assert.equal(CondicionVenta, "MercadoPago");
   assert.equal(Items[0].Bonificacion, 5);
   sale.setMetodoPago("efectivo");

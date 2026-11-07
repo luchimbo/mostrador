@@ -48,7 +48,6 @@ const snapshot = sale.snapshot(porId, [], settings);
 const { Pagos, ...comprobante } = armarComprobante({
   lines: snapshot.lines,
   metodoPago: snapshot.metodoPago,
-  totales: snapshot.totales,
   idCliente: config.contabilium.idClienteConsumidorFinal,
   tipoFc: cotizacion ? TIPO_COTIZACION : "FCB",
   settings,

@@ -1,7 +1,7 @@
 // Arma y emite la factura electrónica en Contabilium a partir de la venta en curso.
 import { config } from "./config.js";
 import { clasificarDocumento, formatearDocumento, nombreFiscal, tipoFactura } from "./documento.js";
-import { combinarDescuentos, esContado, repartirTotal, round2 } from "./pricing.js";
+import { combinarDescuentos, esContado, round2 } from "./pricing.js";
 import { importeContabilium } from "./cobranza.js";
 
 // Venta en efectivo sin factura: Ventas → Facturación con tipo de comprobante Cotización.
@@ -85,11 +85,9 @@ async function resolverCliente(backend, datos, { sinFactura = false } = {}) {
   return { id, nombre, condicionIva, documentoTexto: formatearDocumento(doc) };
 }
 
-export function armarComprobante({ lines, metodoPago, transferencia = false, totales, idCliente, tipoFc, settings, cobro }) {
+export function armarComprobante({ lines, metodoPago, transferencia = false, idCliente, tipoFc, settings, cobro }) {
   if (!["FCA", "FCB", TIPO_COTIZACION].includes(tipoFc)) throw new Error("Tipo de comprobante inválido para Contabilium.");
   const pctContado = esContado(metodoPago, { transferencia }) ? settings.descuentoContadoPct : 0;
-  // Con total ajustado, cada línea lleva el precio final que le toca y sin bonificación.
-  const ajustadas = totales?.ajuste ? repartirTotal(lines, pctContado, totales.totalAPagar) : null;
   const hoy = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Argentina/Buenos_Aires" });
   return {
     IdCliente: idCliente,
@@ -103,14 +101,14 @@ export function armarComprobante({ lines, metodoPago, transferencia = false, tot
     FechaEmision: `${hoy}T00:00:00`,
     FechaVencimiento: `${hoy}T00:00:00`,
     Observaciones: tipoFc === TIPO_COTIZACION ? "Venta en mostrador sin factura" : "Venta en mostrador",
-    Items: lines.map((l, i) => ({
+    Items: lines.map((l) => ({
       IdConcepto: Number(l.productId) || null,
       Codigo: l.codigo || "",
       Concepto: l.nombreFactura || l.nombre,
       Cantidad: l.cantidad,
-      PrecioUnitario: round2((ajustadas ? ajustadas[i] / l.cantidad : l.precioFinal) / (1 + l.iva / 100)), // neto sin IVA
+      PrecioUnitario: round2(l.precioFinal / (1 + l.iva / 100)), // neto sin IVA
       Iva: l.iva,
-      Bonificacion: ajustadas ? 0 : combinarDescuentos(l.descuentoPct, pctContado),
+      Bonificacion: combinarDescuentos(l.descuentoPct, pctContado),
     })),
     Pagos: null,
   };
@@ -138,7 +136,6 @@ export async function facturar({ backend, snapshot, datosCliente, settings }) {
     lines: snapshot.lines,
     metodoPago: snapshot.metodoPago,
     transferencia: snapshot.metodoPago === "mercadopago" && Boolean(snapshot.transferencia),
-    totales: snapshot.totales,
     idCliente: cliente.id,
     tipoFc,
     settings,
