@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { accion, api, buscar, pesos, useEstado } from "./lib.js";
+import { detalleConfirmado } from "../shared/confirmacion-venta.js";
 import CobranzaManual from "./CobranzaManual.jsx";
 import MensajeVendedor from "./MensajeVendedor.jsx";
 
@@ -16,6 +17,7 @@ export default function Vendedor() {
   const [rubro, setRubro] = useState(null);
   const [mensaje, setMensaje] = useState(null);
   const buscador = useRef(null);
+  const agregadosPendientes = useRef(new Map());
 
   // Se recarga la lista cuando cambia Contabilium o los precios de la tienda.
   const actualizado = estado?.catalogo.actualizado;
@@ -32,20 +34,36 @@ export default function Vendedor() {
 
   async function ejecutar(tipo, datos) {
     const res = await accion(tipo, datos);
-    if (!res.ok) setMensaje(res.error);
-    else setMensaje(null);
+    setMensaje(res.ok ? null : { tipo, texto: res.error });
     return res;
   }
 
   async function agregar(productId, reglaId) {
-    await ejecutar("agregar", { productId, reglaId });
-    setTexto("");
-    buscador.current?.focus();
+    const id = String(productId);
+    const enTicket = estado.fase === "venta" && estado.lines.some((linea) => String(linea.productId) === id);
+    const pendiente = agregadosPendientes.current.get(id);
+    if (enTicket || pendiente) {
+      if (enTicket || (await pendiente).ok) {
+        setMensaje({ tipo: "agregar", texto: "Este producto ya está en el ticket. Ajustá la cantidad con − y +." });
+      }
+      return;
+    }
+
+    const solicitud = ejecutar("agregar", { productId, reglaId });
+    agregadosPendientes.current.set(id, solicitud);
+    try {
+      if (!(await solicitud).ok) return;
+      setTexto("");
+      buscador.current?.focus();
+    } finally {
+      agregadosPendientes.current.delete(id);
+    }
   }
 
   if (!estado) return <div className="cargando">Conectando con el mostrador…</div>;
 
   const bloqueado = ["facturando", "cobranza", "cobrando"].includes(estado.fase);
+  const errorTicket = (mensaje?.tipo !== "agregar" && mensaje?.texto) || estado.error;
 
   return (
     <div className="vendedor">
@@ -81,6 +99,7 @@ export default function Vendedor() {
               </button>
             ))}
           </div>
+          {mensaje?.tipo === "agregar" && <div className="aviso pendiente" role="alert">{mensaje.texto}</div>}
           <div className="grilla">
             {visibles.map((p) => (
               <button key={p.id} className="producto" disabled={bloqueado} onClick={() => agregar(p.id)}>
@@ -123,7 +142,7 @@ export default function Vendedor() {
               {estado.lines.length > 0 && <Cobro estado={estado} bloqueado={bloqueado} ejecutar={ejecutar} />}
             </>
           )}
-          {(mensaje || estado.error) && <div className="aviso error">{mensaje || estado.error}</div>}
+          {errorTicket && <div className="aviso error">{errorTicket}</div>}
         </section>
       </div>
     </div>
@@ -230,10 +249,22 @@ function Cobro({ estado, bloqueado, ejecutar }) {
   const [condicionIva, setCondicionIva] = useState("");
   const [email, setEmail] = useState("");
   const [pideDatos, setPideDatos] = useState(false);
+  const [revision, setRevision] = useState(null);
+  const dialogo = useRef(null);
 
-  async function facturar(e) {
+  useEffect(() => {
+    if (revision && !dialogo.current.open) dialogo.current.showModal();
+  }, [revision]);
+
+  function revisar(e) {
     e.preventDefault();
-    const res = await ejecutar("facturar", { documento, nombre, condicionIva, email });
+    if (!dialogo.current.open) setRevision(estado);
+  }
+
+  async function confirmar() {
+    if (!dialogo.current.open || !revision || bloqueado) return;
+    dialogo.current.close();
+    const res = await ejecutar("facturar", { documento, nombre, condicionIva, email, confirmacion: detalleConfirmado(revision) });
     if (res.ok && res.necesitaDatos) setPideDatos(true);
   }
 
@@ -245,7 +276,7 @@ function Cobro({ estado, bloqueado, ejecutar }) {
   const tipo = soloDigitos.length === 11 ? "CUIT" : "DNI";
 
   return (
-    <form className="cobro" onSubmit={facturar}>
+    <form className="cobro" onSubmit={revisar}>
       <label>Condición de venta</label>
       <div className="metodos">
         {METODOS.map(([id, nombreMetodo]) => (
@@ -351,6 +382,33 @@ function Cobro({ estado, bloqueado, ejecutar }) {
       ) : estado.metodoPago === "otros" ? (
         <p className="aviso pendiente">Tarjeta combinada con efectivo o transferencia. Registrá los importes de cada medio manualmente en Contabilium.</p>
       ) : null}
+      <dialog className="revision-venta" ref={dialogo} aria-labelledby="titulo-revision-venta" onClose={() => setRevision(null)}>
+        {revision && <>
+          <h2 id="titulo-revision-venta">{revision.sinFactura ? "Vas a registrar una cotización" : "Vas a facturar esta venta"}</h2>
+          <div className="revision-productos">
+            <table>
+              <thead><tr><th>Unidades</th><th>Producto</th><th>Precio unitario</th><th>Importe</th></tr></thead>
+              <tbody>
+                {revision.lines.map((linea) => (
+                  <tr key={linea.lineId}>
+                    <td>{linea.cantidad}</td>
+                    <th scope="row">{linea.nombre}</th>
+                    <td>{pesos(linea.precioFinal)}</td>
+                    <td>{pesos(linea.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Totales totales={revision.totales} />
+          <div className="acciones">
+            <button type="button" className="secundario" onClick={() => dialogo.current.close()}>Volver</button>
+            <button type="button" className="primario" disabled={bloqueado} onClick={confirmar}>
+              {revision.sinFactura ? "Confirmar y registrar" : "Confirmar y facturar"}
+            </button>
+          </div>
+        </>}
+      </dialog>
     </form>
   );
 }

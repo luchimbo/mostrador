@@ -15,6 +15,7 @@ import { claveCorrecta, COOKIE, crearLimite, crearSesion, DURACION_MS, leerCooki
 import { almacenamiento, appendLog, getSettings, guardarCopia, readJson, readLog, saveSettings, writeJson } from "./store.js";
 import { actualizarPreciosTienda, combinarConTienda, estadoTienda, sincronizarTienda, tiendaSinContabilium } from "./tiendanube.js";
 import { productosEnReposo } from "../shared/display.js";
+import { detalleConfirmado } from "../shared/confirmacion-venta.js";
 import { incluirProductosPrueba } from "./catalog.js";
 import { createOnlinePublisher } from "./online-publisher.js";
 import { createReviewsPublisher } from "./reviews-publisher.js";
@@ -199,6 +200,9 @@ async function accionFacturar(datosCliente) {
   if (sale.comprobantePendiente) throw new Error(`Revisá el comprobante ${sale.comprobantePendiente} en Contabilium antes de iniciar otra emisión.`);
   const settings = getSettings();
   const snapshot = sale.snapshot(productsById, reglas, settings);
+  if (datosCliente.confirmacion !== detalleConfirmado(snapshot)) {
+    throw new Error("Revisá el detalle de la venta y confirmalo antes de emitir el comprobante.");
+  }
   sale.fase = "facturando";
   sale.error = null;
   broadcast();

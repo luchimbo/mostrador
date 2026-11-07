@@ -28,25 +28,23 @@ export class Sale {
   agregar(product, { reglaId = null } = {}) {
     if (["facturando", "cobrando", "cobranza"].includes(this.fase)) throw new Error("Terminá la factura y su cobranza antes de agregar productos.");
     if (this.fase === "gracias") this.reset();
-    const existente = this.lines.find((l) => String(l.productId) === String(product.id));
-    if (existente) {
-      existente.cantidad += 1;
-    } else {
-      this.lines.push({
-        lineId: nextLineId++,
-        productId: product.id,
-        codigo: product.codigo,
-        nombre: product.nombre,
-        nombreFactura: product.nombreFactura || product.nombre,
-        precioFinal: product.precioFinal,
-        imagen: product.imagen || null,
-        iva: product.iva ?? 21,
-        cantidad: 1,
-        reglaId,
-        descuentoPct: 0,
-        crossSelling: null, // null = automático (todo lo que no es el más caro)
-      });
+    if (this.lines.some((l) => String(l.productId) === String(product.id))) {
+      throw new Error("Este producto ya está en el ticket. Ajustá la cantidad con − y +.");
     }
+    this.lines.push({
+      lineId: nextLineId++,
+      productId: product.id,
+      codigo: product.codigo,
+      nombre: product.nombre,
+      nombreFactura: product.nombreFactura || product.nombre,
+      precioFinal: product.precioFinal,
+      imagen: product.imagen || null,
+      iva: product.iva ?? 21,
+      cantidad: 1,
+      reglaId,
+      descuentoPct: 0,
+      crossSelling: null, // null = automático (todo lo que no es el más caro)
+    });
     this.fase = "venta";
     this.inicio ??= new Date().toISOString();
     this.error = null;

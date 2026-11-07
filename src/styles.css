@@ -93,6 +93,14 @@ s { color: var(--gris); margin-right: 6px; font-weight: 400; }
 .datos-nuevos p { margin: 0; font-size: 0.9em; }
 .acciones { display: flex; gap: 8px; justify-content: space-between; }
 .acciones .primario { flex: 1; padding: 14px; font-size: 1.1em; }
+.revision-venta { width: min(640px, calc(100% - 24px)); max-height: calc(100% - 24px); padding: 20px; border: 1px solid var(--borde); border-radius: 12px; color: var(--texto); }
+.revision-venta::backdrop { background: rgb(0 0 0 / 45%); }
+.revision-productos { margin: 16px 0; overflow-x: auto; }
+.revision-productos table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9em; }
+.revision-productos th, .revision-productos td { padding: 8px; border-bottom: 1px solid var(--borde); }
+.revision-productos td { white-space: nowrap; text-align: right; }
+.revision-productos tbody th { font-weight: 400; }
+.revision-venta .acciones { margin-top: 16px; }
 .factura-ok { display: flex; flex-direction: column; gap: 8px; text-align: center; padding-top: 40px; }
 .factura-ok h2 { color: var(--ok); }
 .factura-ok p { margin: 0; }

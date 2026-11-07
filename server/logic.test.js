@@ -61,6 +61,25 @@ test("sugerencias y descuento atado al producto que lo disparó", () => {
   assert.equal(snap.lines[0].descuentoPct, 0);
 });
 
+test("una venta solo agrega una unidad por producto y cambia cantidades desde la línea", () => {
+  const sale = new Sale();
+  const producto = porId.get("101");
+  sale.agregar(producto);
+  const [linea] = sale.lines;
+  assert.equal(linea.cantidad, 1);
+  assert.throws(() => sale.agregar(producto), /ya está en el ticket/);
+  assert.equal(sale.lines.length, 1);
+  assert.equal(linea.cantidad, 1);
+
+  sale.cambiarCantidad(linea.lineId, 2);
+  assert.equal(linea.cantidad, 2);
+  sale.cambiarCantidad(linea.lineId, 1);
+  assert.equal(linea.cantidad, 1);
+  sale.cambiarCantidad(linea.lineId, 0);
+  sale.agregar(producto);
+  assert.equal(sale.lines[0].cantidad, 1);
+});
+
 test("con el cross-selling del mostrador apagado no hay sugerencias", () => {
   const sale = new Sale();
   sale.agregar(porId.get("101"));

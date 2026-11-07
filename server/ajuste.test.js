@@ -12,7 +12,7 @@ function ventaEnEfectivo() {
   const sale = new Sale();
   sale.agregar(teclado);
   sale.agregar(pedal);
-  sale.agregar(pedal);
+  sale.cambiarCantidad(sale.lines[1].lineId, 2);
   sale.setMetodoPago("efectivo");
   return sale;
 }
