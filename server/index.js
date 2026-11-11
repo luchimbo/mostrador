@@ -1,7 +1,12 @@
+import { analizarRecomendaciones } from './recomendaciones-informe.js';
+import { exportarComercial } from './comercial-excel.js';
+import { informeComercial, compararComercial } from './comercial.js';
+import { capturarCarrito, recuperarCarrito } from './carritos.js';
 import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import express from "express";
 import QRCode from "qrcode";
 import { Server } from "socket.io";
@@ -20,11 +25,20 @@ import { incluirProductosPrueba } from "./catalog.js";
 import { createOnlinePublisher } from "./online-publisher.js";
 import { createReviewsPublisher } from "./reviews-publisher.js";
 import { importCsv, newestReviewsFirst, normalizeReview, reviewKey } from "../shared/reviews.js";
-import { comprobanteEmitido, registrarCobranza } from "./cobranza.js";
+import { comprobanteEmitido, importeContabilium, registrarCobranza } from "./cobranza.js";
 import { estadisticas, filasReporte, generarReporteExcel, sinProductosPrueba } from "./reporte.js";
+import { migrarReglas } from "../shared/recommendations.js";
 
 const backend = config.mode === "real" ? contabilium : mock;
 const facturador = config.facturacionSimulada ? mock : contabilium;
+if (config.facturacionSimulada) {
+  const comprobantes = "comprobantes-simulados.json";
+  const ultimoId = (await readLog("ventas.jsonl")).reduce((max, venta) => {
+    const id = Number(venta.idComprobante);
+    return venta.prueba && Number.isSafeInteger(id) ? Math.max(max, id) : max;
+  }, 0);
+  mock.configurarComprobantesPrueba(readJson(comprobantes, []), registros => writeJson(comprobantes, registros), ultimoId);
+}
 
 // ---------- Catálogo (copia local, se refresca periódicamente) ----------
 let catalogo = readJson("catalogo.json", { productos: [], actualizado: null });
@@ -67,11 +81,11 @@ async function actualizarCatalogo() {
     catalogo = { productos, actualizado: new Date().toISOString() };
     productsById = indexar(productos);
     guardarCopia("catalogo.json", catalogo);
-    if (reglasPendientes) {
-      reglas = mock.reglasInicialesReales([...productsById.values()]);
-      await writeJson("reglas.json", reglas);
-      reglasPendientes = false;
-    }
+    if (reglasPendientes) await encolarGuardadoReglas(async () => {
+      if (!reglasPendientes) return;
+      const iniciales = migrarReglas(mock.reglasInicialesReales([...productsById.values()]), getSettings().descuentoGeneralPct);
+      await persistirReglas(iniciales);
+    });
     errorCatalogo = null;
     onlinePublisher.schedule();
     console.log(`[catálogo] ${productos.length} productos`);
@@ -90,7 +104,24 @@ if (!reglas) {
   reglas = config.mode === "mock" ? mock.REGLAS_DEMO : [];
   if (!reglasPendientes) await writeJson("reglas.json", reglas);
 }
+if (reglas.some((r) => !r.descuentosPorProducto)) {
+  reglas = migrarReglas(reglas, getSettings().descuentoGeneralPct);
+  await writeJson("reglas.json", reglas);
+}
 let destacados = readJson("destacados.json", config.mode === "mock" ? ["102", "202", "301", "502", "701"] : []);
+let colaReglas = Promise.resolve();
+
+function encolarGuardadoReglas(guardar) {
+  const siguiente = colaReglas.then(guardar);
+  colaReglas = siguiente.catch(() => {});
+  return siguiente;
+}
+
+async function persistirReglas(nuevas) {
+  await writeJson("reglas.json", nuevas);
+  reglas = nuevas;
+  reglasPendientes = false;
+}
 
 const onlinePublisher = createOnlinePublisher({ connection: config.onlineCrossSelling, read: readJson, write: writeJson,
   source: () => ({ products: [...productsById.values()], rules: reglas, settings: getSettings() }) });
@@ -100,16 +131,60 @@ const reviewsPublisher = createReviewsPublisher({ connection: config.onlineCross
   knownSkus: () => { const skus = codigosCatalogo(); return skus.size ? skus : null; } });
 
 // ---------- Venta en curso ----------
-const sale = new Sale();
-const recuperada = readJson("factura-en-cobranza.json", null);
-if (comprobanteEmitido(recuperada) && recuperada.cobranza?.modalidad === "manual") {
-  sale.factura = recuperada;
-  sale.cliente = recuperada.cliente;
-  sale.fase = "cobranza";
-  sale.lines = recuperada.lineas || [];
-  sale.metodoPago = recuperada.metodoPago;
-  sale.inicio = recuperada.inicio;
+let colaEventos=Promise.resolve();
+const registrarEvento = evento => {
+ const registro={...evento,fecha:new Date().toISOString(),canal:'mostrador',reglaNombre:evento.reglaNombre||reglas.find(r=>r.id===evento.reglaId)?.nombre||'Regla histórica'};
+ colaEventos=colaEventos.catch(()=>{}).then(()=>appendLog('recomendaciones-eventos.jsonl',registro));
+ colaEventos.catch(e=>console.error('[recomendaciones] No se pudo guardar evento:',e.message));
+};
+const sale = new Sale(registrarEvento);
+const VENTA_ACTIVA = config.mode === "real" && config.facturacionSimulada ? "venta-activa-simulada.json" : "venta-activa.json";
+const activa = readJson(VENTA_ACTIVA, undefined, { estricto: true });
+if (activa) {
+  sale.restaurar(activa);
+  sale.recuperada = true;
+  if (["facturando", "cobrando"].includes(sale.fase)) {
+    sale.fase = sale.operacion ? "revision" : sale.factura ? "cobranza" : "venta";
+    if (sale.fase === "revision") sale.error = "Verificá el resultado de la operación en Contabilium.";
+  }
+} else if (activa === undefined) {
+  const anterior = readJson("factura-en-cobranza.json", null);
+  if (comprobanteEmitido(anterior) && anterior.cobranza?.modalidad === "manual"
+      && (config.mode === "mock" || Boolean(anterior.prueba) === config.facturacionSimulada)) {
+    sale.restaurar({
+      factura: anterior, cliente: anterior.cliente, lines: anterior.lineas || [],
+      metodoPago: anterior.metodoPago, inicio: anterior.inicio, recuperada: true,
+      fase: anterior.cobranza.estado === "pendiente" ? "cobranza" : "revision",
+    });
+    if (sale.fase === "revision") sale.operacion = { clase: "cobro", uid: crypto.randomUUID() };
+    await writeJson(VENTA_ACTIVA, sale.persistible());
+  }
 }
+let colaVenta = Promise.resolve();
+
+function encolarVenta(trabajo) {
+  const pendiente = colaVenta.then(trabajo);
+  colaVenta = pendiente.catch(() => {});
+  return pendiente;
+}
+
+function guardarVenta(venta = sale) {
+  const cerrada = ["idle", "gracias"].includes(venta.fase);
+  return writeJson(VENTA_ACTIVA, cerrada ? null : venta.persistible());
+}
+
+async function editarVenta(editar) {
+  const eventos = [];
+  const borrador = new Sale(evento => eventos.push(evento));
+  borrador.restaurar(sale.persistible());
+  const resultado = editar(borrador);
+  borrador.actualizarProductos(productsById);
+  await guardarVenta(borrador);
+  sale.restaurar(borrador.persistible());
+  eventos.forEach(registrarEvento);
+  return resultado;
+}
+
 let timerGracias = null;
 
 function destinosCobranza() {
@@ -123,11 +198,14 @@ function destinosCobranza() {
 function finalizarVenta() {
   sale.fase = "gracias";
   clearTimeout(timerGracias);
-  timerGracias = setTimeout(() => { if (sale.fase === "gracias") { sale.reset(); broadcast(); } }, 45_000);
-}
-
-function guardarFacturaEnCobranza(factura = sale.factura) {
-  return writeJson("factura-en-cobranza.json", { ...factura, lineas: sale.lines, inicio: sale.inicio });
+  timerGracias = setTimeout(() => {
+    void encolarVenta(() => {
+      if (sale.fase === "gracias") {
+        sale.reset();
+        broadcast();
+      }
+    });
+  }, 45_000);
 }
 
 // Si no se eligieron destacados, se muestra el producto más caro con foto de cada categoría.
@@ -144,10 +222,12 @@ function productosDestacados() {
 }
 
 function estado() {
+  sale.actualizarProductos(productsById);
   const settings = getSettings();
   return {
     ...sale.snapshot(productsById, reglas, settings),
     modo: config.mode,
+    preview: config.preview,
     facturacionSimulada: config.facturacionSimulada,
     destinosCobranza: destinosCobranza().map(({ key, nombre, medios }) => ({ key, nombre, medios })),
     destacados: productosDestacados(),
@@ -194,110 +274,215 @@ function producto(id) {
   return p;
 }
 
+function detalleVenta(snapshot) {
+  return {
+    fecha: new Date().toISOString(), inicio: sale.inicio, sessionId: sale.sessionId,
+    metodoPago: snapshot.metodoPago,
+    transferencia: snapshot.metodoPago === "mercadopago" && snapshot.transferencia,
+    venta: { lines: structuredClone(sale.lines), inicio: sale.inicio },
+    lineas: snapshot.lines.map((l) => ({
+      productId: l.productId, nombre: l.nombre, cantidad: l.cantidad, total: l.total,
+      reglaId: l.reglaId, crossSelling: l.crossSelling, bruto: l.bruto, iva: l.iva,
+      costo: productsById.get(String(l.productId))?.costo ?? null,
+      reglaNombre: reglas.find(r => r.id === l.reglaId)?.nombre ?? null,
+    })),
+    sugerenciasMostradas: [...sale.sugerenciasMostradas],
+  };
+}
+
+const mismoId = (a, b) => a != null && b != null && String(a) === String(b);
+const mismoImporte = (a, b) => Math.round(a * 100) === Math.round(b * 100);
+
+async function registrarVentaEmitida() {
+  const { factura, operacion } = sale;
+  const existente = (await readLog("ventas.jsonl", { estricto: true }))
+    .find(v => mismoId(v.idComprobante, factura.idComprobante));
+  if (existente) {
+    if (existente.sessionId !== sale.sessionId) throw new Error("El comprobante ya está vinculado a otra venta.");
+    return;
+  }
+  const cobranza = factura.cobranza?.estado === "registrada" && operacion.fechaCobro
+    ? { ...factura.cobranza, fecha: operacion.fechaCobro } : factura.cobranza;
+  await appendLog("ventas.jsonl", {
+    ...operacion.detalle, numero: factura.numero, idComprobante: factura.idComprobante,
+    cae: factura.cae, cliente: factura.cliente, url: factura.url, cobranza, total: factura.total,
+    tipo: factura.tipo, condicionVenta: factura.condicionVenta, prueba: factura.prueba, factura,
+  }, operacion.uid);
+}
+
+async function concluirOperacion(fase) {
+  const anterior = sale.persistible();
+  sale.fase = fase;
+  sale.error = null;
+  sale.operacion = null;
+  sale.comprobantePendiente = null;
+  try {
+    await guardarVenta();
+  } catch (error) {
+    sale.restaurar(anterior);
+    throw error;
+  }
+  if (fase === "gracias") finalizarVenta();
+}
+
+async function marcarRevision(error) {
+  sale.fase = "revision";
+  sale.error = error.message;
+  try {
+    await guardarVenta();
+  } catch (fallo) {
+    console.error("[venta activa] No se pudo guardar la revisión:", fallo.message);
+  }
+}
+
 async function accionFacturar(datosCliente) {
-  if (sale.fase === "facturando") throw new Error("Ya se está emitiendo una factura.");
-  if (comprobanteEmitido(sale.factura)) throw new Error("Esta venta ya tiene un comprobante emitido. Iniciá una nueva venta.");
-  if (sale.comprobantePendiente) throw new Error(`Revisá el comprobante ${sale.comprobantePendiente} en Contabilium antes de iniciar otra emisión.`);
+  if (sale.fase !== "venta") throw new Error("La venta actual no está disponible para emitir.");
+  sale.actualizarProductos(productsById);
+  if (sale.lines.some(l => l.noDisponible)) throw new Error("Quitá o reemplazá los productos que ya no están en el catálogo.");
   const settings = getSettings();
   const snapshot = sale.snapshot(productsById, reglas, settings);
   if (datosCliente.confirmacion !== detalleConfirmado(snapshot)) {
     throw new Error("Revisá el detalle de la venta y confirmalo antes de emitir el comprobante.");
   }
+  const anterior = sale.persistible();
   sale.fase = "facturando";
   sale.error = null;
   broadcast();
+  let enviado = false;
   try {
-    const res = await facturar({ backend: facturador, snapshot, datosCliente, settings });
-    if (res.necesitaDatos) {
-      sale.fase = "venta";
-      return res;
+    const factura = await facturar({
+      backend: facturador, snapshot, datosCliente, settings,
+      antesDeEmitir: async (esperado) => {
+        sale.totalesEmitidos = snapshot.totales;
+        sale.operacion = { clase: "emision", uid: crypto.randomUUID(), esperado, detalle: detalleVenta(snapshot) };
+        await guardarVenta();
+        enviado = true;
+      },
+    });
+    if (factura.necesitaDatos) {
+      sale.restaurar(anterior);
+      return factura;
     }
-    sale.factura = res;
-    sale.cliente = res.cliente;
-    // La factura ya está emitida: se intentan los dos guardados aunque uno falle.
-    const guardados = await Promise.allSettled([res.cobranza?.modalidad === "manual" && guardarFacturaEnCobranza(res), appendLog("ventas.jsonl", {
-      fecha: new Date().toISOString(),
-      inicio: sale.inicio,
-      numero: res.numero,
-      idComprobante: res.idComprobante,
-      cae: res.cae,
-      cliente: res.cliente,
-      url: res.url,
-      cobranza: res.cobranza,
-      total: res.total,
-      metodoPago: snapshot.metodoPago,
-      transferencia: snapshot.metodoPago === "mercadopago" && snapshot.transferencia,
-      tipo: res.tipo,
-      condicionVenta: res.condicionVenta,
-      prueba: res.prueba,
-      factura: res,
-      venta: { lines: sale.lines, inicio: sale.inicio },
-      lineas: snapshot.lines.map((l) => ({ productId: l.productId, nombre: l.nombre, cantidad: l.cantidad, total: l.total, reglaId: l.reglaId, crossSelling: l.crossSelling })),
-      sugerenciasMostradas: [...sale.sugerenciasMostradas],
-    })]);
-    const fallo = guardados.find((g) => g.status === "rejected");
-    if (fallo) throw new Error(`El comprobante ${res.numero || res.idComprobante} se emitió, pero no se pudo guardar en el mostrador: ${fallo.reason.message}. Revisalo en Contabilium.`);
-    if (res.cobranza?.modalidad === "manual") sale.fase = "cobranza";
-    else finalizarVenta();
-    return { ok: true, factura: res };
-  } catch (err) {
-    sale.fase = comprobanteEmitido(sale.factura) ? "cobranza" : "venta";
-    sale.error = err.message;
-    if (err.idComprobante) {
-      sale.comprobantePendiente = err.idComprobante;
-      await appendLog("facturas-pendientes.jsonl", {
-        fecha: new Date().toISOString(), idComprobante: err.idComprobante,
-        error: err.message, total: snapshot.totales.totalAPagar, metodoPago: snapshot.metodoPago,
-      }).catch((e) => console.error("[datos] no se pudo guardar la factura pendiente:", e.message));
+    sale.factura = factura;
+    sale.cliente = factura.cliente;
+    sale.operacion.esperado.total = factura.total;
+    if (factura.cobranza?.estado === "registrada") sale.operacion.fechaCobro = new Date().toISOString();
+    await guardarVenta();
+    await registrarVentaEmitida();
+    if (factura.cobranza?.estado === "revisar") {
+      await marcarRevision(new Error("Verificá el saldo del comprobante en Contabilium."));
+    } else {
+      await concluirOperacion(factura.cobranza?.modalidad === "manual" ? "cobranza" : "gracias");
     }
-    throw err;
+    return { factura };
+  } catch (error) {
+    if (enviado) {
+      sale.comprobantePendiente = error.idComprobante ?? sale.factura?.idComprobante ?? null;
+      await marcarRevision(error);
+    } else sale.restaurar(anterior);
+    throw error;
   }
+}
+
+async function registrarCobroLocal(cobranza) {
+  const id = sale.factura.idComprobante;
+  const existente = (await readLog("cobranzas.jsonl", { estricto: true }))
+    .find(c => mismoId(c.idComprobante, id) && c.estado === "registrada");
+  if (!existente) await appendLog("cobranzas.jsonl", { idComprobante: id, ...cobranza }, sale.operacion.uid);
+  sale.factura.cobranza = existente || cobranza;
 }
 
 async function accionCobrar({ pagos }) {
   if (sale.fase !== "cobranza" || !sale.factura) throw new Error("No hay una factura pendiente de cobranza en esta venta.");
+  const anterior = sale.persistible();
   sale.fase = "cobrando";
   sale.error = null;
   broadcast();
+  let enviado = false;
   try {
-    const cobranza = await registrarCobranza({ factura: sale.factura, pagos, destinos: destinosCobranza(), backend: facturador,
-      // Persistir el intento antes de mover dinero para no repetirlo tras un reinicio.
-      antesDeEnviar: () => guardarFacturaEnCobranza({ ...sale.factura, cobranza: { ...sale.factura.cobranza, estado: "revisar" } }),
+    const cobranza = await registrarCobranza({
+      factura: sale.factura, pagos, destinos: destinosCobranza(), backend: facturador,
+      antesDeEnviar: async () => {
+        sale.operacion = { clase: "cobro", uid: crypto.randomUUID() };
+        await guardarVenta();
+        enviado = true;
+      },
     });
-    sale.factura.cobranza = cobranza;
-    await appendLog("cobranzas.jsonl", { idComprobante: sale.factura.idComprobante, ...cobranza });
-    await writeJson("factura-en-cobranza.json", null);
-    finalizarVenta();
+    sale.operacion.cobranzaConfirmada = cobranza;
+    await guardarVenta();
+    await registrarCobroLocal(cobranza);
+    await concluirOperacion("gracias");
     return { cobranza };
-  } catch (err) {
-    const revisar = err.cobranzaIncierta || sale.factura.cobranza.estado === "registrada";
-    if (revisar) sale.factura.cobranza.estado = "revisar";
-    sale.fase = "cobranza";
-    sale.error = err.message;
-    // Si tampoco se puede guardar, la venta queda en pantalla con el aviso para revisarla.
-    await Promise.allSettled([
-      revisar && appendLog("cobranzas.jsonl", { idComprobante: sale.factura.idComprobante, ...sale.factura.cobranza }),
-      guardarFacturaEnCobranza(),
-    ]);
-    throw err;
+  } catch (error) {
+    if (enviado || error.revisarSaldo) {
+      sale.operacion ??= { clase: "cobro", uid: crypto.randomUUID() };
+      await marcarRevision(error);
+    } else sale.restaurar(anterior);
+    throw error;
   }
 }
 
+async function verificarOperacion({ id: ingresado }) {
+  if (sale.fase !== "revision" || !sale.operacion) throw new Error("No hay una operación para verificar.");
+  const { operacion } = sale;
+  const id = Number(sale.factura?.idComprobante ?? sale.comprobantePendiente ?? ingresado);
+  if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Ingresá el ID del comprobante de Contabilium.");
+  const actual = await facturador.consultarComprobante(id);
+  if (!actual) throw new Error("No se encontró el comprobante en Contabilium.");
+  const cae = actual.Cae || actual.CAE;
+  const tipo = actual.TipoFc ?? actual.Tipo;
+  const total = importeContabilium(actual.ImporteTotalNeto);
+  const saldo = importeContabilium(actual.Saldo);
+  if (operacion.clase === "cobro") {
+    const factura = sale.factura;
+    const coincide = factura.cotizacion ? tipo === (factura.tipoFc || "COT") && !cae : mismoId(cae, factura.cae);
+    if (!coincide || !mismoImporte(total, factura.total)) throw new Error("El comprobante no coincide con la cobranza del mostrador.");
+    if (saldo !== 0) throw new Error(`Saldo en Contabilium: ${saldo.toFixed(2)}. Revisá allí la cobranza.`);
+    await registrarCobroLocal(operacion.cobranzaConfirmada || { estado: "registrada", modalidad: "manual" });
+    return concluirOperacion("gracias");
+  }
+  const esperado = operacion.esperado;
+  const cliente = actual.IdCliente ?? actual.IDCliente ?? actual.Cliente?.Id;
+  const cotizacion = esperado.tipoFc === "COT";
+  if (!mismoId(cliente, esperado.clienteId) || tipo !== esperado.tipoFc || !mismoImporte(total, esperado.total)
+      || (cotizacion ? Boolean(cae) : !cae) || (sale.factura?.cae && !mismoId(cae, sale.factura.cae))) {
+    throw new Error("Cliente, tipo, total o autorización del comprobante no coinciden con la venta confirmada.");
+  }
+  const existente = (await readLog("ventas.jsonl", { estricto: true })).find(v => mismoId(v.idComprobante, id));
+  if (existente && existente.sessionId !== sale.sessionId) throw new Error("El comprobante ya está vinculado a otra venta.");
+  const modalidad = esperado.modalidad;
+  const pendiente = modalidad === "manual" && mismoImporte(saldo, total);
+  if (saldo !== 0 && !pendiente) throw new Error(`Saldo en Contabilium: ${saldo.toFixed(2)}. Revisá allí la cobranza.`);
+  sale.factura = {
+    tipo: cotizacion ? "Cotización" : esperado.tipoFc === "FCA" ? "Factura A" : "Factura B",
+    numero: actual.Numero ?? actual.numero ?? actual.NumeroComprobante ?? `ID ${id}`,
+    url: actual.LinkPublico ?? actual.Url ?? "",
+    tipoFc: esperado.tipoFc, cotizacion, cae, total, idComprobante: id,
+    cliente: esperado.cliente, condicionVenta: esperado.condicionVenta,
+    metodoPago: sale.metodoPago, prueba: config.facturacionSimulada,
+    ...sale.factura, cobranza: { modalidad, estado: pendiente ? "pendiente" : "registrada" },
+  };
+  sale.cliente = sale.factura.cliente;
+  await guardarVenta();
+  await registrarVentaEmitida();
+  if (!pendiente && existente && existente.cobranza?.estado !== "registrada") {
+    await registrarCobroLocal({ modalidad, estado: "registrada" });
+  }
+  await concluirOperacion(pendiente ? "cobranza" : "gracias");
+}
+
 const ACCIONES = {
-  agregar: ({ productId, reglaId }) => sale.agregar(producto(productId), { reglaId }),
-  cantidad: ({ lineId, cantidad }) => sale.cambiarCantidad(lineId, Number(cantidad)),
-  quitar: ({ lineId }) => sale.quitar(lineId),
-  crossSelling: ({ lineId, valor }) => sale.marcarCrossSelling(lineId, valor),
-  metodoPago: ({ metodo }) => sale.setMetodoPago(metodo),
-  sinFactura: ({ valor }) => sale.setSinFactura(valor),
-  transferencia: ({ valor }) => sale.setTransferencia(valor),
-  cancelar: async () => {
-    if (["facturando", "cobrando"].includes(sale.fase)) throw new Error("Esperá a que termine la operación en curso.");
-    await writeJson("factura-en-cobranza.json", null);
-    sale.reset();
-  },
-  facturar: (datos) => accionFacturar(datos),
-  cobrar: (datos) => accionCobrar(datos),
+  agregar: ({ productId, reglaId }, venta) => venta.agregar(producto(productId), { reglaId }),
+  cantidad: ({ lineId, cantidad }, venta) => venta.cambiarCantidad(lineId, Number(cantidad)),
+  quitar: ({ lineId }, venta) => venta.quitar(lineId),
+  crossSelling: ({ lineId, valor }, venta) => venta.marcarCrossSelling(lineId, valor),
+  metodoPago: ({ metodo }, venta) => venta.setMetodoPago(metodo),
+  sinFactura: ({ valor }, venta) => venta.setSinFactura(valor),
+  transferencia: ({ valor }, venta) => venta.setTransferencia(valor),
+  cancelar: (_datos, venta) => venta.reset(),
+  verificarOperacion,
+  facturar: accionFacturar,
+  cobrar: accionCobrar,
 };
 
 io.on("connection", (socket) => {
@@ -307,14 +492,20 @@ io.on("connection", (socket) => {
     const fn = ACCIONES[msg?.tipo];
     try {
       if (socket.handshake.auth.soloLectura) throw new Error("La vista de supervisión es de solo lectura.");
-      if (!fn) throw new Error(`Acción desconocida: ${msg?.tipo}`);
-      if (["cantidad", "quitar", "crossSelling", "metodoPago", "sinFactura", "transferencia"].includes(msg.tipo) && ["facturando", "cobranza", "cobrando"].includes(sale.fase)) throw new Error("Terminá la factura y cobranza antes de modificar la venta.");
-      const res = await fn(msg);
+      if (!Object.hasOwn(ACCIONES, msg?.tipo)) throw new Error(`Acción desconocida: ${msg?.tipo}`);
+      if (["facturando", "cobrando"].includes(sale.fase)) throw new Error("Esperá a que termine la operación en curso.");
+      const res = await encolarVenta(() => {
+        if (sale.fase === "revision" && msg.tipo !== "verificarOperacion") throw new Error("Verificá la operación en Contabilium antes de continuar.");
+        if (["facturando", "cobranza", "cobrando"].includes(sale.fase)
+            && !["cobrar", "cancelar"].includes(msg.tipo)) throw new Error("Terminá la factura y cobranza antes de modificar la venta.");
+        if (["facturar", "cobrar", "verificarOperacion"].includes(msg.tipo)) return fn(msg);
+        return editarVenta(venta => fn(msg, venta));
+      });
+      broadcast();
       ack({ ok: true, ...(res || {}) });
     } catch (err) {
-      ack({ ok: false, error: err.message });
-    } finally {
       broadcast();
+      ack({ ok: false, error: err.message });
     }
   });
 });
@@ -476,13 +667,46 @@ app.post("/api/resenas/estado", async (_req, res) => {
   try { res.json({ ...reviewsPublisher.status(), remote: await reviewsPublisher.remoteStatus() }); }
   catch (err) { res.status(502).json({ error: err.message }); }
 });
-app.put("/api/reglas", async (req, res) => {
-  if (!Array.isArray(req.body)) return res.status(400).json({ error: "Se esperaba una lista de reglas." });
-  await writeJson("reglas.json", req.body);
-  reglas = req.body;
+function descuentosValidos(regla) {
+  const descuentos = regla?.descuentosPorProducto;
+  if (!Array.isArray(regla?.sugeridos) || !descuentos || typeof descuentos !== "object" || Array.isArray(descuentos)) return false;
+  const sugeridos = new Set(regla.sugeridos.map(String));
+  return Object.entries(descuentos).every(([id, pct]) => sugeridos.has(id) && Number.isFinite(pct) && pct >= 0 && pct <= 100);
+}
+
+async function responderGuardadoReglas(nuevas, res) {
+  await persistirReglas(nuevas);
   onlinePublisher.schedule();
   broadcast();
   res.json(reglas);
+}
+
+app.put("/api/reglas", async (req, res) => {
+  if (!Array.isArray(req.body)) return res.status(400).json({ error: "Se esperaba una lista de reglas." });
+  if (!req.body.every(descuentosValidos)) return res.status(400).json({ error: "Descuentos por producto inválidos." });
+  await encolarGuardadoReglas(() => responderGuardadoReglas(req.body, res));
+});
+
+app.put("/api/reglas/:id", async (req, res) => {
+  const { original, regla } = req.body ?? {};
+  const { id } = req.params;
+  if (original?.id == null || String(original.id) !== id || regla?.id !== original.id ||
+      typeof regla.nombre !== "string" || typeof regla.activa !== "boolean" ||
+      !["rubro", "subrubro", "producto", "nombre"].includes(regla.disparador?.tipo) ||
+      !["string", "number"].includes(typeof regla.disparador.valor) ||
+      (regla.disparador.excluir != null && typeof regla.disparador.excluir !== "string") ||
+      (regla.mensaje != null && typeof regla.mensaje !== "string")) {
+    return res.status(400).json({ error: "Los datos de la regla son inválidos." });
+  }
+  if (!descuentosValidos(regla)) return res.status(400).json({ error: "Descuentos por producto inválidos." });
+  await encolarGuardadoReglas(async () => {
+    const actual = reglas.find((r) => String(r.id) === id);
+    if (!actual) return res.status(404).json({ error: "La regla ya no existe." });
+    if (!isDeepStrictEqual(actual, original)) {
+      return res.status(409).json({ error: "Otra sesión cambió la regla. Recargala antes de volver a editarla." });
+    }
+    await responderGuardadoReglas(reglas.map((r) => r === actual ? regla : r), res);
+  });
 });
 
 app.get("/api/destacados", (_req, res) => res.json(destacados));
@@ -594,22 +818,51 @@ app.post("/api/reporte", async (req, res) => {
   }
 });
 
-app.post("/api/facturas/:id/retomar", async (req, res) => {
+app.post("/api/facturas/:id/retomar", (req, res, next) => encolarVenta(async () => {
   if (sale.fase !== "idle") return res.status(409).json({ error: "Terminá la venta actual antes de retomar una cobranza." });
-  const v = (await readLog("ventas.jsonl")).find(v => String(v.idComprobante) === req.params.id && comprobanteEmitido(v.factura) && (!v.prueba || config.facturacionSimulada));
+  const v = (await readLog("ventas.jsonl")).find(v => String(v.idComprobante) === req.params.id && comprobanteEmitido(v.factura) && (config.mode === "mock" || Boolean(v.prueba) === config.facturacionSimulada));
   const registro = (await readLog("cobranzas.jsonl")).filter(c => String(c.idComprobante) === req.params.id).at(-1);
   const cobranza = registro || v?.cobranza;
   if (!v || cobranza?.modalidad !== "manual" || cobranza.estado !== "pendiente") return res.status(409).json({ error: "La factura no tiene una cobranza manual pendiente disponible." });
-  sale.factura = { ...v.factura, cobranza };
-  sale.lines = v.venta?.lines || [];
-  sale.inicio = v.venta?.inicio;
-  sale.metodoPago = v.metodoPago;
-  sale.cliente = v.cliente;
-  sale.fase = "cobranza";
-  await guardarFacturaEnCobranza();
+  await editarVenta(venta => {
+    venta.factura = { ...v.factura, cobranza };
+    venta.restaurar({
+      sessionId: v.sessionId || sale.sessionId, lines: v.venta?.lines || [], inicio: v.venta?.inicio,
+      metodoPago: v.metodoPago, cliente: v.cliente, fase: "cobranza",
+    });
+  });
   broadcast();
   res.json({ ok: true });
-});
+}).catch(next));
+
+// Informes comerciales: únicamente datos verificables del mostrador.
+app.get('/api/comercial', async (req,res,next) => {try {
+ const ventas=sinProductosPrueba(await readLog('ventas.jsonl'),config.productosPruebaIds);
+ const cobros=await readLog('cobranzas.jsonl'),productos=[...productsById.values()],opciones={...readJson('reposicion.json',{}),stockActualizado:catalogo.actualizado,incluirPruebas:config.preview};
+ if([req.query.desde,req.query.hasta].some(f=>f&&(!/^\d{4}-\d{2}-\d{2}$/.test(f)||!Number.isFinite(Date.parse(f))))||req.query.desde&&req.query.hasta&&req.query.desde>req.query.hasta)return res.status(400).json({error:'Elegí un rango de fechas válido.'});
+ const actual=informeComercial(ventas,cobros,productos,{desde:req.query.desde,hasta:req.query.hasta},opciones);
+ if(req.query.desde&&req.query.hasta){const inicio=Date.parse(req.query.desde),fin=Date.parse(req.query.hasta),duracion=fin-inicio+86400000;if(Number.isFinite(duracion)&&duracion>0){const iso=t=>new Date(t).toISOString().slice(0,10);actual.comparacion=compararComercial(actual,informeComercial(ventas,cobros,productos,{desde:iso(inicio-duracion),hasta:iso(inicio-86400000)},opciones));}}
+ if(req.query.formato==='xlsx'){res.set('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');res.set('Content-Disposition','attachment; filename=analisis-comercial.xlsx');return res.send(Buffer.from(await exportarComercial(actual)));}
+ await colaEventos;
+ actual.recomendaciones=analizarRecomendaciones(await readLog('recomendaciones-eventos.jsonl'),ventas.map(v=>({...v,cobranza:cobros.filter(c=>String(c.idComprobante)===String(v.idComprobante)).at(-1)||v.cobranza})),actual.periodo);
+ res.json(actual);
+} catch(e){next(e);}});
+app.post('/api/comercial/actualizar',async (_req,res,next)=>{try{await actualizarCatalogo();res.json({ok:!errorCatalogo,error:errorCatalogo});}catch(e){next(e);}});
+app.put('/api/comercial/reposicion',async(req,res,next)=>{try{const {ventana,objetivo}=req.body;if(!Number.isInteger(ventana)||ventana<1||ventana>365||!Number.isInteger(objetivo)||objetivo<1||objetivo>365)return res.status(400).json({error:'Ingresá días entre 1 y 365.'});await writeJson('reposicion.json',{ventana,objetivo});res.json({ok:true});}catch(e){next(e);}});
+app.get('/api/carritos',(_req,res)=>res.json(readJson('carritos.json',[])));
+let colaCarritos=Promise.resolve();
+app.use('/api/carritos', (req,res,next)=>{if(req.method==='GET')return next();const trabajo=colaCarritos.then(()=>new Promise(resolve=>{res.once('finish',resolve);res.once('close',resolve);next();}));colaCarritos=trabajo.catch(()=>{});});
+app.post('/api/carritos',async(req,res,next)=>{try{const c=capturarCarrito(sale,req.body.referencia);await writeJson('carritos.json',[...readJson('carritos.json',[]),c]);res.json(c);}catch(e){res.status(400).json({error:e.message});}});
+app.patch('/api/carritos/:id',async(req,res,next)=>{try{const referencia=String(req.body.referencia||'').trim();if(!referencia||referencia.length>120)return res.status(400).json({error:'Referencia inválida.'});const lista=readJson('carritos.json',[]);const c=lista.find(c=>c.id===req.params.id);if(!c)return res.sendStatus(404);c.referencia=referencia;await writeJson('carritos.json',lista);res.json(c);}catch(e){next(e);}});
+app.delete('/api/carritos/:id',async(req,res,next)=>{try{await writeJson('carritos.json',readJson('carritos.json',[]).filter(c=>c.id!==req.params.id));res.json({ok:true});}catch(e){next(e);}});
+app.post('/api/carritos/:id/recuperar', (req, res) => encolarVenta(async () => {
+  const carrito = readJson('carritos.json', []).find(c => c.id === req.params.id);
+  if (!carrito) return res.sendStatus(404);
+  if (!["idle", "venta", "gracias"].includes(sale.fase)) return res.status(409).json({ error: "Terminá la operación actual antes de recuperar un carrito." });
+  const cambios = await editarVenta(venta => recuperarCarrito(venta, carrito, productsById, req.body.reemplazar === true));
+  broadcast();
+  res.json({ ok: true, cambios });
+}).catch(e => res.status(400).json({ error: e.message })));
 
 // ---------- Frontend ----------
 const dist = path.join(ROOT, "dist");
@@ -618,7 +871,7 @@ if (fs.existsSync(dist)) {
   app.get(/^\/(?!api|socket\.io).*/, (_req, res) => res.sendFile(path.join(dist, "index.html")));
 }
 
-server.listen(config.port, () => {
+server.listen(config.port, config.preview ? "127.0.0.1" : "0.0.0.0", () => {
   console.log(`Mostrador PC MIDI en http://localhost:${config.port}  (catálogo: ${config.mode === "real" ? "Contabilium" : "de prueba"} · facturas: ${config.facturacionSimulada ? "SIMULADAS" : "REALES"} · datos: ${almacenamiento} · acceso: ${config.claveAcceso ? "con contraseña" : "SIN contraseña"})`);
   console.log(`  Vendedor: http://localhost:${config.port}/vendedor`);
   console.log(`  Cliente:  http://localhost:${config.port}/cliente`);

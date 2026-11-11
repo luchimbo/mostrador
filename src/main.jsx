@@ -4,7 +4,7 @@ import Cliente from "./Cliente.jsx";
 import Login from "./Login.jsx";
 import Vendedor from "./Vendedor.jsx";
 import Supervisor from "./Supervisor.jsx";
-import { socket } from "./lib.js";
+import { socket, useEstado } from "./lib.js";
 import "./styles.css";
 
 const pantallas = { "/vendedor": Vendedor, "/cliente": Cliente, "/admin": Admin, "/supervision": Supervisor };
@@ -32,4 +32,8 @@ function Inicio() {
   );
 }
 
-createRoot(document.getElementById("root")).render(sesion.ok ? <Pantalla /> : <Login />);
+function Aplicacion(){
+ const {estado}=useEstado();
+ return <>{estado?.preview&&<div className="preview-banner" role="status">VISTA PREVIA LOCAL · Datos de ejemplo · Facturación simulada · Cambios separados de producción</div>}<Pantalla /></>;
+}
+createRoot(document.getElementById("root")).render(sesion.ok ? <Aplicacion /> : <Login />);

@@ -2,6 +2,17 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { obtenerSugerencias, reglaSeDispara } from "./recommendations.js";
 import { coincideNombre } from "../shared/reglas.js";
+import { descuentoRegla, migrarReglas } from "../shared/recommendations.js";
+
+test("migración conserva descuentos y permite heredar o fijar cero", () => {
+  const originales = [{ id: "a", sugeridos: ["1", "2"], descuentoPct: 8 }, { id: "b", sugeridos: ["1"], descuentoPct: 10 }];
+  const migradas = migrarReglas(originales, 10);
+  assert.deepEqual(migrarReglas(migradas, 10), migradas);
+  assert.equal(descuentoRegla(migradas[0], "1", { descuentoGeneralPct: 20 }), 8);
+  assert.equal(descuentoRegla(migradas[1], "1", { descuentoGeneralPct: 20 }), 20);
+  migradas[1].descuentosPorProducto["1"] = 0;
+  assert.equal(descuentoRegla(migradas[1], "1", { descuentoGeneralPct: 20 }), 0);
+});
 import { DEFAULT_SETTINGS } from "./store.js";
 
 const producto = (id, nombre) => ({ id, nombre, rubro: "General", precioFinal: 1000, costo: 100, stock: 5, activo: true });

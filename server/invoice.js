@@ -30,7 +30,7 @@ async function resolverCliente(backend, datos, { sinFactura = false } = {}) {
   if (sinFactura && !String(datos.documento || "").replace(/\D/g, "")) {
     const id = config.contabilium.idClienteConsumidorFinal;
     if (!id && !config.facturacionSimulada) throw new Error("Falta configurar CONTABILIUM_ID_CLIENTE_CF en el archivo .env para ventas sin documento.");
-    return { id, nombre: "Consumidor Final", condicionIva: "CF", documentoTexto: "" };
+    return { id: id ?? 0, nombre: "Consumidor Final", condicionIva: "CF", documentoTexto: "" };
   }
   const doc = clasificarDocumento(datos.documento);
 
@@ -115,7 +115,7 @@ export function armarComprobante({ lines, metodoPago, transferencia = false, idC
 }
 
 // Devuelve { necesitaDatos } si falta información del cliente, o la factura emitida.
-export async function facturar({ backend, snapshot, datosCliente, settings }) {
+export async function facturar({ backend, snapshot, datosCliente, settings, antesDeEmitir = () => {} }) {
   if (!snapshot.lines.length) throw new Error("No hay productos en la venta.");
   if (!snapshot.metodoPago) throw new Error("Elegí el medio de pago.");
   const sinFactura = Boolean(snapshot.sinFactura);
@@ -140,6 +140,15 @@ export async function facturar({ backend, snapshot, datosCliente, settings }) {
     tipoFc,
     settings,
     cobro,
+  });
+
+  await antesDeEmitir({
+    clienteId: cliente.id,
+    cliente: { nombre: cliente.nombre, documento: cliente.documentoTexto },
+    tipoFc,
+    modalidad: !sinFactura && cobro?.automatico ? "automatica" : "manual",
+    condicionVenta: payload.CondicionVenta,
+    total: round2(payload.Items.reduce((sum, item) => sum + item.Cantidad * item.PrecioUnitario * (1 + item.Iva / 100) * (1 - item.Bonificacion / 100), 0)),
   });
 
   if (sinFactura) return registrarCotizacion({ backend, snapshot, payload, cliente });

@@ -593,3 +593,34 @@ button.enlace { border: 0; background: none; padding: 0; color: var(--acento); f
   .factura-fila.cabeza { display: none; }
   .limites { flex-direction: column; align-items: flex-start; }
 }
+
+.preview-banner {padding:10px 20px;background:#fff1d6;color:#744400;border-bottom:1px solid #e8c58b;font-weight:600;text-align:center;font-size:13px;}
+.informes-panel > label {display:inline-flex;align-items:center;gap:8px;margin:8px 12px 8px 0;flex-wrap:wrap;}
+.informes-panel > label input[type=number] {width:90px;}
+.informes-panel > details {padding:12px 0;border-bottom:1px solid var(--borde);}
+.informes-panel summary {cursor:pointer;padding:8px 0;}
+.ticket .informes-panel {padding:12px;}
+.ticket .informes-panel input {max-width:100%;}
+@media(max-width:640px){.informes-panel > label{display:flex;}.preview-banner{font-size:11px;padding:8px;}}
+
+/* El panel conserva su altura dentro del ticket flexible. */
+.carritos-guardados {flex:0 0 auto;min-width:0;border:1px solid var(--borde);border-radius:12px;background:var(--fondo);font-size:14px;}
+.carritos-guardados > summary {cursor:pointer;padding:14px 16px;font-size:16px;font-weight:600;min-height:48px;}
+.carritos-contenido {display:flex;flex-direction:column;align-items:stretch;gap:12px;padding:0 16px 16px;}
+.carritos-contenido > .metrica {margin:0;line-height:1.5;}
+.carritos-contenido > label {display:flex;flex-direction:column;gap:6px;font-weight:600;}
+.carritos-contenido input {width:100%;min-width:0;min-height:42px;font-weight:400;}
+.carritos-contenido button {min-height:42px;white-space:normal;}
+.carritos-contenido > div {display:flex;flex-wrap:wrap;align-items:center;gap:8px;border-top:1px solid var(--borde);padding-top:12px;}
+.carritos-contenido > div > b {flex-basis:100%;overflow-wrap:anywhere;}
+.carritos-contenido > p[role=status] {margin:0;overflow-wrap:anywhere;}
+
+
+.producto.producto-activo {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
+}
+
+.cantidad input {
+  width: 4.5rem;
+}

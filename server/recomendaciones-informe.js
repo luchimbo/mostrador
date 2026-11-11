@@ -1,0 +1,9 @@
+import {round2} from './pricing.js';
+export function analizarRecomendaciones(eventos,ventas,rango={}){
+ const dia=f=>new Date(Date.parse(f)-10800000).toISOString().slice(0,10);
+ const dentro=f=>(!rango.desde||dia(f)>=rango.desde)&&(!rango.hasta||dia(f)<=rango.hasta);
+ const reglas=new Map();const obtener=(id,nombre)=>{if(!reglas.has(id))reglas.set(id,{id,nombre:nombre||'Regla histórica',mostradas:0,agregadas:0,retiradas:0,compras:0,unidades:0,vendido:0,descuento:0,margen:0,unidadesConCosto:0});return reglas.get(id);};
+ const vistos=new Set();for(const e of eventos.filter(e=>dentro(e.fecha))){const r=obtener(e.reglaId,e.reglaNombre);const key=JSON.stringify([e.sessionId,e.reglaId,e.productId]);if(e.tipo==='mostrada'&&!vistos.has(key)){r.mostradas++;vistos.add(key);}if(e.tipo==='agregada')r.agregadas++;if(e.tipo==='retirada')r.retiradas++;}
+ for(const v of ventas.filter(v=>!v.prueba&&v.sessionId&&dentro(v.fecha)&&(!(v.factura?.cotizacion||v.tipo==='COT')||v.cobranza?.estado==='registrada'))){const suma=(v.lineas||[]).reduce((a,l)=>a+l.total,0),factor=suma?v.total/suma:1;const compradas=new Set();for(const l of v.lineas||[]){if(!l.reglaId)continue;const r=obtener(l.reglaId,l.reglaNombre);if(!compradas.has(l.reglaId)){r.compras++;compradas.add(l.reglaId);}r.unidades+=l.cantidad;r.vendido+=l.total*factor;if(l.bruto!=null)r.descuento+=l.bruto-l.total*factor;if(l.costo!=null&&l.iva!=null){r.margen+=l.total*factor/(1+l.iva/100)-l.costo*l.cantidad;r.unidadesConCosto+=l.cantidad;}}}
+ return {desdeMedicion:eventos.length?eventos.reduce((a,e)=>e.fecha<a?e.fecha:a,eventos[0].fecha):null,advertencia:'Historial anterior incompleto. Margen estimado sin gastos ni comisiones; no demuestra ganancia incremental.',reglas:[...reglas.values()].map(r=>({...r,vendido:round2(r.vendido),descuento:round2(r.descuento),margen:r.unidadesConCosto?round2(r.margen):null}))};
+}

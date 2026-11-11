@@ -113,7 +113,7 @@ Doble clic en **`iniciar-mostrador.bat`**. Levanta el servidor y abre las dos pa
 2. Si hay reglas que aplican, el cliente ve "Para completar tu equipo" con el descuento. Si acepta, el vendedor toca **+ Agregar** en la sugerencia. El descuento vale mientras el producto que lo disparó siga en la venta.
 3. Medio de pago: **efectivo o transferencia aplican 5%** de descuento (configurable). Mientras no se elija, el cliente ve ambos totales.
    - **Transferencia**: se cobra con la condición **MercadoPago** eligiendo *Forma de pago → Transferencia*. Lleva el descuento de contado y la cobranza se registra automáticamente, como con tarjeta.
-   - **Total a cobrar**: se calcula automáticamente con los precios del catálogo y los descuentos aplicables.
+   - **Total a cobrar**: se calcula automáticamente con los precios del catálogo y los descuentos aplicables. Al recuperar un carrito se usan los precios vigentes.
 4. Ingresá el DNI o CUIT (obligatorio) y después elegí la condición frente al IVA:
    - Consumidor Final o Exento → Factura B, identificada con el documento ingresado
    - Responsable Inscripto o Monotributista → CUIT obligatorio y Factura A

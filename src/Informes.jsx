@@ -1,3 +1,4 @@
+import Comercial from './Comercial.jsx';
 import { useEffect, useState } from "react";
 import { api, pesos } from "./lib.js";
 import { Cabecera, Kpis, Segmentos } from "./ui.jsx";
@@ -70,11 +71,11 @@ export default function Informes() {
         const m = { facturado: datos.facturado, ventas: datos.ventas, cross: datos.agregados };
         const on = { facturado: o?.total || 0, ventas: o?.orders || 0, cross: o?.crossSellingRevenue || 0 };
         const v = canal === "mostrador" ? m : canal === "online" ? on
-          : { facturado: m.facturado + on.facturado, ventas: m.ventas + on.ventas, cross: m.cross + on.cross };
-        const desglose = (f, fmt = (n) => n) => canal === "todos" ? `Mostrador ${fmt(f(m))} · Online ${onlineListo ? fmt(f(on)) : "sin datos"}` : null;
+          : m;
+        const desglose = (f, fmt = (n) => n) => canal === "todos" ? `Mostrador ${fmt(f(m))} · Online ${onlineListo ? fmt(f(on)) : "sin datos"} · sin consolidar` : null;
         const aviso = canal !== "mostrador" && !onlineListo ? "Tienda online sin datos" : null;
         return <Kpis items={[
-          { etiqueta: "Facturado", valor: pesos(v.facturado), detalle: desglose((x) => x.facturado, pesos) || aviso || (canal === "mostrador" ? variacion(datos.facturado, previo?.facturado) : null) },
+          { etiqueta: canal === "online" ? "Importe online informado" : "Ventas registradas (mostrador)", valor: pesos(v.facturado), detalle: desglose((x) => x.facturado, pesos) || aviso || (canal === "mostrador" ? variacion(datos.facturado, previo?.facturado) : null) },
           { etiqueta: "Ventas", valor: v.ventas, detalle: desglose((x) => x.ventas) || aviso || (canal === "mostrador" ? variacion(datos.ventas, previo?.ventas) : null) },
           { etiqueta: "Ticket promedio", valor: pesos(v.ventas ? v.facturado / v.ventas : 0) },
           { etiqueta: "Vendido por cross-selling", valor: pesos(v.cross), detalle: `${pct(v.cross, v.facturado)} de lo facturado` },
@@ -91,6 +92,7 @@ export default function Informes() {
         <div className="barras-eje"><span>{fechaCorta(datos.porDia[0].dia)}</span>{datos.porDia.length > 1 && <span>{fechaCorta(datos.porDia.at(-1).dia)}</span>}</div>
       </div>}
 
+      <Comercial desde={desde} hasta={hasta} />
       <CrossSellingPorCanal local={datos} online={online} />
 
       <div className="informes-panel">

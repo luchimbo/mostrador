@@ -16,7 +16,7 @@ export default function Cliente() {
         </header>
       )}
       {estado.fase === "idle" && <Reposo key={JSON.stringify(estado.reposo)} estado={estado} />}
-      {["venta", "facturando", "cobranza", "cobrando"].includes(estado.fase) && <Venta estado={estado} />}
+      {["venta", "facturando", "cobranza", "cobrando", "revision"].includes(estado.fase) && <Venta estado={estado} />}
       {estado.fase === "gracias" && <Gracias factura={estado.factura} opinionUrl={estado.opinionUrl} />}
       {estado.fase === "facturando" && (
         <div className="overlay">

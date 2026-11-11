@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const envPath = path.join(ROOT, ".env");
-if (fs.existsSync(envPath)) process.loadEnvFile(envPath);
+if (process.env.MOSTRADOR_PREVIEW !== "1" && fs.existsSync(envPath)) process.loadEnvFile(envPath);
 
 const env = process.env;
 
@@ -13,6 +13,7 @@ const mode = env.CONTABILIUM_MODE === "real" ? "real" : "mock";
 
 export const config = {
   port: Number(env.PORT) || 3000,
+  preview: env.MOSTRADOR_PREVIEW === "1",
   mode,
   // Con FACTURACION=simulada se usa el catálogo real pero las facturas son de prueba (no van a Contabilium).
   facturacionSimulada: mode === "mock" || env.FACTURACION === "simulada",
@@ -37,7 +38,7 @@ export const config = {
     storeId: (env.CROSS_SELLING_STORE_ID || "").trim(),
     auto: (env.CROSS_SELLING_AUTO || "").trim().toLowerCase() !== "no",
   },
-  dataDir: path.join(ROOT, "data", mode),
+  dataDir: path.join(ROOT, "data", env.MOSTRADOR_PREVIEW === "1" ? "preview" : mode),
   // Contraseña compartida para entrar al mostrador. Vacía = sin login (solo para uso en esta computadora).
   claveAcceso: (env.CLAVE_ACCESO || "").trim(),
   // Con DATABASE_URL los datos van a PostgreSQL en vez de a la carpeta data/.

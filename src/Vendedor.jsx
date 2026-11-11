@@ -1,3 +1,4 @@
+import { Carritos } from './Comercial.jsx';
 import { useEffect, useMemo, useRef, useState } from "react";
 import { accion, api, buscar, pesos, useEstado } from "./lib.js";
 import { detalleConfirmado } from "../shared/confirmacion-venta.js";
@@ -17,6 +18,8 @@ export default function Vendedor() {
   const [rubro, setRubro] = useState(null);
   const [mensaje, setMensaje] = useState(null);
   const buscador = useRef(null);
+  const [resultadoActivo, setResultadoActivo] = useState(null);
+  const [lineaEditada, setLineaEditada] = useState(null);
   const agregadosPendientes = useRef(new Map());
 
   // Se recarga la lista cuando cambia Contabilium o los precios de la tienda.
@@ -40,20 +43,20 @@ export default function Vendedor() {
 
   async function agregar(productId, reglaId) {
     const id = String(productId);
-    const enTicket = estado.fase === "venta" && estado.lines.some((linea) => String(linea.productId) === id);
+    const enTicket = estado.fase === "venta" && estado.lines.find((linea) => String(linea.productId) === id);
     const pendiente = agregadosPendientes.current.get(id);
-    if (enTicket || pendiente) {
-      if (enTicket || (await pendiente).ok) {
-        setMensaje({ tipo: "agregar", texto: "Este producto ya está en el ticket. Ajustá la cantidad con − y +." });
-      }
+    if (enTicket) {
+      setLineaEditada(enTicket.lineId);
       return;
     }
+    if (pendiente) return;
 
     const solicitud = ejecutar("agregar", { productId, reglaId });
     agregadosPendientes.current.set(id, solicitud);
     try {
       if (!(await solicitud).ok) return;
       setTexto("");
+      setResultadoActivo(null);
       buscador.current?.focus();
     } finally {
       agregadosPendientes.current.delete(id);
@@ -62,7 +65,45 @@ export default function Vendedor() {
 
   if (!estado) return <div className="cargando">Conectando con el mostrador…</div>;
 
-  const bloqueado = ["facturando", "cobranza", "cobrando"].includes(estado.fase);
+  const bloqueado = !conectado || ["facturando", "cobranza", "cobrando", "revision"].includes(estado.fase);
+  const indiceActivo = visibles.findIndex(p => p.id === resultadoActivo);
+  const ultimaLinea = estado.lines.at(-1);
+
+  function tecladoBusqueda(evento) {
+    const { key } = evento;
+    if (key === "Escape") {
+      setTexto("");
+      setResultadoActivo(null);
+    }
+    if (bloqueado || evento.nativeEvent.isComposing) return;
+    if (key === "F2" && estado.fase === "venta" && ultimaLinea) {
+      evento.preventDefault();
+      setLineaEditada(ultimaLinea.lineId);
+    }
+    if (["ArrowDown", "ArrowUp"].includes(key) && visibles.length) {
+      evento.preventDefault();
+      const siguiente = key === "ArrowDown" ? Math.min(indiceActivo + 1, visibles.length - 1)
+        : indiceActivo < 0 ? visibles.length - 1 : Math.max(indiceActivo - 1, 0);
+      const id = visibles[siguiente].id;
+      setResultadoActivo(id);
+      document.getElementById(`producto-${id}`)?.scrollIntoView({ block: "nearest" });
+    }
+    if (key === "Enter" && !evento.repeat) {
+      const sku = texto.trim().toLowerCase();
+      const exactos = sku ? productos.filter(p => String(p.codigo || "").trim().toLowerCase() === sku) : [];
+      const elegido = exactos.length === 1 ? exactos[0] : visibles[indiceActivo] ?? (visibles.length === 1 ? visibles[0] : null);
+      if (elegido) {
+        evento.preventDefault();
+        agregar(elegido.id);
+      }
+    }
+  }
+
+  function cerrarCantidad() {
+    setLineaEditada(null);
+    buscador.current?.focus();
+  }
+
   const errorTicket = (mensaje?.tipo !== "agregar" && mensaje?.texto) || estado.error;
 
   return (
@@ -83,18 +124,18 @@ export default function Vendedor() {
             className="buscador"
             placeholder="Buscar producto (nombre o código)…"
             value={texto}
-            onChange={(e) => setTexto(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && visibles.length === 1) agregar(visibles[0].id);
-              if (e.key === "Escape") setTexto("");
-            }}
+            aria-label="Buscar producto por nombre o SKU"
+            aria-describedby="teclado-productos"
+            onChange={(e) => { setTexto(e.target.value); setResultadoActivo(null); }}
+            onKeyDown={tecladoBusqueda}
           />
+          <small id="teclado-productos">↑/↓ Elegir · Enter Agregar · F2 Editar última cantidad</small>
           <div className="rubros">
-            <button className={!rubro ? "activo" : ""} onClick={() => setRubro(null)}>
+            <button className={!rubro ? "activo" : ""} onClick={() => { setRubro(null); setResultadoActivo(null); }}>
               Todos
             </button>
             {rubros.map((r) => (
-              <button key={r} className={rubro === r ? "activo" : ""} onClick={() => setRubro(r)}>
+              <button key={r} className={rubro === r ? "activo" : ""} onClick={() => { setRubro(r); setResultadoActivo(null); }}>
                 {r}
               </button>
             ))}
@@ -102,7 +143,7 @@ export default function Vendedor() {
           {mensaje?.tipo === "agregar" && <div className="aviso pendiente" role="alert">{mensaje.texto}</div>}
           <div className="grilla">
             {visibles.map((p) => (
-              <button key={p.id} className="producto" disabled={bloqueado} onClick={() => agregar(p.id)}>
+              <button key={p.id} id={`producto-${p.id}`} className={`producto${p.id === resultadoActivo ? " producto-activo" : ""}`} disabled={bloqueado} onClick={() => agregar(p.id)}>
                 <span className="foto">{p.imagen ? <img src={p.imagen} alt="" loading="lazy" /> : p.rubro}</span>
                 <span className="nombre">{p.nombre}</span>
                 {p.productoPrueba && <span className="badge gris">Producto de prueba</span>}
@@ -131,25 +172,85 @@ export default function Vendedor() {
         </section>
 
         <section className="ticket">
-          {["gracias", "cobranza", "cobrando"].includes(estado.fase) ? (
+          <Carritos bloqueado={bloqueado} estado={estado} />
+          {estado.recuperada && <p className="aviso pendiente" role="status">Venta recuperada</p>}
+          {estado.revision ? (
+            <RevisionOperacion revision={estado.revision} conectado={conectado} ejecutar={ejecutar} />
+          ) : ["gracias", "cobranza", "cobrando"].includes(estado.fase) ? (
             <FacturaEmitida factura={estado.factura} estado={estado} ejecutar={ejecutar} onNueva={() => ejecutar("cancelar")} />
           ) : (
             <>
               <h2>Venta actual</h2>
-              <Lineas estado={estado} bloqueado={bloqueado} ejecutar={ejecutar} />
+              <Lineas estado={estado} bloqueado={bloqueado} ejecutar={ejecutar} lineaEditada={lineaEditada} cerrarCantidad={cerrarCantidad} />
               <Sugerencias sugerencias={estado.sugerencias} bloqueado={bloqueado} onAgregar={agregar} />
               <Totales totales={estado.totales} />
-              {estado.lines.length > 0 && <Cobro estado={estado} bloqueado={bloqueado} ejecutar={ejecutar} />}
+              {estado.lines.some(l => l.noDisponible) && <p className="aviso pendiente">Quitá o reemplazá los productos fuera del catálogo antes de facturar.</p>}
+              {estado.lines.length > 0 && <Cobro estado={estado} bloqueado={bloqueado} faltanProductos={estado.lines.some(l => l.noDisponible)} ejecutar={ejecutar} />}
             </>
           )}
-          {errorTicket && <div className="aviso error">{errorTicket}</div>}
+          {errorTicket && <div className="aviso error" role="alert">{errorTicket}</div>}
         </section>
       </div>
     </div>
   );
 }
 
-function Lineas({ estado, bloqueado, ejecutar }) {
+function RevisionOperacion({ revision, conectado, ejecutar }) {
+  const [id, setId] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  async function verificar(evento) {
+    evento.preventDefault();
+    if (ocupado || !conectado) return;
+    setOcupado(true);
+    try {
+      await ejecutar("verificarOperacion", { id });
+    } finally {
+      setOcupado(false);
+    }
+  }
+  return (
+    <form onSubmit={verificar}>
+      <h2>Operación pendiente de verificar</h2>
+      {revision.id ? <p>Comprobante {revision.numero || revision.id}</p> : (
+        <label>
+          ID del comprobante en Contabilium
+          <input inputMode="numeric" pattern="[0-9]+" required value={id} onChange={e => setId(e.target.value)} />
+        </label>
+      )}
+      <button className="primario" disabled={!conectado || ocupado}>
+        {ocupado ? "Verificando…" : "Verificar en Contabilium"}
+      </button>
+    </form>
+  );
+}
+
+function EditarCantidad({ linea, ejecutar, cerrar }) {
+  const [cantidad, setCantidad] = useState(String(linea.cantidad));
+  const [ocupado, setOcupado] = useState(false);
+  const campo = useRef(null);
+  useEffect(() => { campo.current?.select(); }, []);
+  async function editar(evento) {
+    if (evento.key === "Escape" && !ocupado) {
+      evento.preventDefault();
+      cerrar();
+    }
+    if (evento.key !== "Enter") return;
+    evento.preventDefault();
+    if (ocupado || evento.repeat) return;
+    if (!campo.current.reportValidity()) return;
+    setOcupado(true);
+    try {
+      if ((await ejecutar("cantidad", { lineId: linea.lineId, cantidad: Number(cantidad) })).ok) cerrar();
+    } finally {
+      setOcupado(false);
+    }
+  }
+  return <input ref={campo} autoFocus aria-label={`Cantidad de ${linea.nombre}`} type="number"
+    min="1" max={Number.MAX_SAFE_INTEGER} step="1" required readOnly={ocupado}
+    value={cantidad} onChange={evento => setCantidad(evento.target.value)} onKeyDown={editar} />;
+}
+
+function Lineas({ estado, bloqueado, ejecutar, lineaEditada, cerrarCantidad }) {
   if (!estado.lines.length) return <p className="vacio">Agregá productos desde la izquierda.</p>;
   return (
     <ul className="lineas">
@@ -159,6 +260,7 @@ function Lineas({ estado, bloqueado, ejecutar }) {
             <span className="nombre">{l.nombre}</span>
             <span className="detalle">
               {pesos(l.precioFinal)} c/u
+              {l.noDisponible && <span className="badge gris">Fuera del catálogo</span>}
               {l.descuentoPct > 0 && <span className="badge">-{l.descuentoPct}% recomendado</span>}
               {l.recomendado && l.descuentoPct === 0 && <span className="badge gris">sin descuento</span>}
             </span>
@@ -172,7 +274,9 @@ function Lineas({ estado, bloqueado, ejecutar }) {
             <button disabled={bloqueado} onClick={() => ejecutar("cantidad", { lineId: l.lineId, cantidad: l.cantidad - 1 })}>
               −
             </button>
-            <span>{l.cantidad}</span>
+            {lineaEditada === l.lineId && !bloqueado
+              ? <EditarCantidad key={l.lineId} linea={l} ejecutar={ejecutar} cerrar={cerrarCantidad} />
+              : <span>{l.cantidad}</span>}
             <button disabled={bloqueado} onClick={() => ejecutar("cantidad", { lineId: l.lineId, cantidad: l.cantidad + 1 })}>
               +
             </button>
@@ -243,7 +347,7 @@ export function Totales({ totales }) {
   );
 }
 
-function Cobro({ estado, bloqueado, ejecutar }) {
+function Cobro({ estado, bloqueado, faltanProductos, ejecutar }) {
   const [documento, setDocumento] = useState("");
   const [nombre, setNombre] = useState("");
   const [condicionIva, setCondicionIva] = useState("");
@@ -357,7 +461,7 @@ function Cobro({ estado, bloqueado, ejecutar }) {
         <button type="button" className="secundario" disabled={bloqueado} onClick={() => ejecutar("cancelar")}>
           Cancelar venta
         </button>
-        <button type="submit" className="primario" disabled={bloqueado || !estado.metodoPago || !documentoListo || (documentoCompleto && !condicionIva)}>
+        <button type="submit" className="primario" disabled={bloqueado || faltanProductos || !estado.metodoPago || !documentoListo || (documentoCompleto && !condicionIva)}>
           {bloqueado
             ? sinFactura ? "Registrando cotización…" : "Emitiendo factura…"
             : !estado.metodoPago

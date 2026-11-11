@@ -2,13 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { api, pesos } from "./lib.js";
 import { reglaSeDispara } from "../shared/recommendations.js";
 import { DetalleOnline, useCanalOnline } from "./OnlineCrossSelling.jsx";
-import { BarraCambios, Cabecera, Interruptor, Pildora, SelectorProducto } from "./ui.jsx";
+import { BarraCambios, Cabecera, Interruptor, Pildora } from "./ui.jsx";
+import EditorRegla from "./EditorRegla.jsx";
 
 const coincideDisparador = (regla, p, porId) => reglaSeDispara(
   { ...regla, activa: true }, [{ productId: p.id }], porId,
 ) !== null;
 
 const LIMITES = [
+  ["descuentoGeneralPct", "Descuento por defecto", "Descuento por defecto", "%"],
   ["descuentoContadoPct", "Contado", "Descuento pagando en efectivo o transferencia", "%"],
   ["descuentoMaximoPct", "Desc. máximo", "Descuento máximo para una recomendación", "%"],
   ["margenMinimoPct", "Margen mínimo", "Margen mínimo sobre el costo con descuento", "%"],
@@ -62,7 +64,7 @@ export default function CrossSelling({ productos, porId }) {
   }
   function nueva() {
     const id = `r${Date.now()}`;
-    setReglas((rs) => [...rs, { id, nombre: "Nueva regla", activa: true, disparador: { tipo: "rubro", valor: "" }, sugeridos: [], descuentoPct: 10 }]);
+    setReglas((rs) => [...rs, { id, nombre: "Nueva regla", activa: true, disparador: { tipo: "rubro", valor: "" }, sugeridos: [], descuentosPorProducto: {} }]);
     setAbierta(id); setBusqueda(""); setOrden("guardado");
   }
   function quitar(r) {
@@ -130,6 +132,7 @@ export default function CrossSelling({ productos, porId }) {
       </div> : <div className="limites-resumen">
         {LIMITES.map(([campo, corto, etiqueta, unidad]) => <span key={campo} title={etiqueta}>{corto} <b>{ajustes[campo]}{unidad}</b></span>)}
       </div>}
+      <p className="metrica">El descuento por defecto se aplica a los productos sin descuento personalizado. Si cambiás el descuento de un producto, ese valor se conserva aunque después cambies el descuento por defecto.</p>
       <button className="enlace" onClick={() => setEditarLimites(!editarLimites)}>{editarLimites ? "Listo" : "Editar límites"}</button>
     </div>
 
@@ -156,14 +159,20 @@ export default function CrossSelling({ productos, porId }) {
             <button className="regla-resumen" aria-expanded={abiertaEsta} onClick={() => setAbierta(abiertaEsta ? null : r.id)}>
               <b>{r.nombre}</b>
               {r.disparador.valor && !cs.length && <Pildora tipo="aviso">Sin coincidencias</Pildora>}
-              <small>{resumenDisparador(r.disparador, porId)}{r.disparador.valor && ` · ${cs.length} productos`} → {r.sugeridos.length} sugeridos al {r.descuentoPct}%</small>
+              <small>{resumenDisparador(r.disparador, porId)}{r.disparador.valor && ` · ${cs.length} productos`} → {r.sugeridos.length} sugeridos</small>
             </button>
             <span className="num" title="Ventas completadas con esta regla en el mostrador">{m ? (m.ventas ?? 0) : "—"}</span>
             <span className="num" title="Ventas completadas con esta regla en la tienda online">{o ? (o.sold ?? 0) : metricasOnline ? 0 : "—"}</span>
             <span className="num">{m || o ? pesos(vendido(r)) : "—"}</span>
             <button className="quitar-regla" aria-label={`Quitar la regla ${r.nombre}`} title="Quitar regla" onClick={() => quitar(r)}>×</button>
           </div>
-          {abiertaEsta && <EditorRegla r={r} cs={cs} productos={productos} porId={porId} rubros={rubros} subrubros={subrubros} cambiar={(c) => cambiar(r.id, c)} m={m} o={o} />}
+          {abiertaEsta && <EditorRegla r={r} cs={cs} productos={productos} porId={porId} rubros={rubros} subrubros={subrubros} general={ajustes.descuentoGeneralPct} cambiar={(c) => cambiar(r.id, c)}>
+            {(m || o) && <p className="metrica">
+              {m && <>Mostrador: mostrada {m.mostradas} veces · aceptada {m.aceptadas}{tasa(m.aceptadas, m.mostradas)} · {m.ventas ?? 0} ventas completadas · vendido {pesos(m.ingresos)}</>}
+              {m && o && <br />}
+              {o && <>Online: mostrada {o.shown} veces · aceptada {o.accepted}{tasa(o.accepted, o.shown)} · vendida {o.sold} · vendido {pesos(o.revenue)}</>}
+            </p>}
+          </EditorRegla>}
         </div>;
       })}
     </div>
@@ -172,56 +181,4 @@ export default function CrossSelling({ productos, porId }) {
     <BarraCambios pendiente={sinGuardar} ocupado={ocupado} onClick={guardar} boton="Guardar cambios"
       texto={`Hay cambios sin guardar${st?.configured && moduloActivo ? " · al guardar se publican también en la tienda online" : ""}`} />
   </section>;
-}
-
-function EditorRegla({ r, cs, productos, porId, rubros, subrubros, cambiar, m, o }) {
-  const d = r.disparador;
-  const opciones = d.tipo === "rubro" ? rubros : subrubros;
-  return <div className="editor-regla">
-    <label className="campo">Nombre de la regla<input value={r.nombre} onChange={(e) => cambiar({ nombre: e.target.value })} /></label>
-    <div className="campo">Si lleva
-      <div className="fila-botones">
-        <select value={d.tipo} onChange={(e) => cambiar({ disparador: { tipo: e.target.value, valor: "" } })}>
-          <option value="rubro">cualquier producto de la categoría</option>
-          <option value="subrubro">cualquier producto de la subcategoría</option>
-          <option value="producto">el producto</option>
-          <option value="nombre">un producto cuyo nombre contenga</option>
-        </select>
-        {d.tipo === "nombre" ? <>
-          <input placeholder="minifuse, studio m" title="Separá con comas. Si ponés varias palabras juntas, el nombre tiene que tener todas."
-            value={d.valor} onChange={(e) => cambiar({ disparador: { ...d, valor: e.target.value } })} />
-          <span>salvo que contenga</span>
-          <input placeholder="funda, soporte" value={d.excluir || ""} onChange={(e) => cambiar({ disparador: { ...d, excluir: e.target.value } })} />
-        </> : d.tipo === "producto" ? (d.valor
-          ? <span className="chip">{porId.get(String(d.valor))?.nombre || `#${d.valor}`}<button onClick={() => cambiar({ disparador: { tipo: "producto", valor: "" } })}>×</button></span>
-          : <SelectorProducto productos={productos} onElegir={(p) => cambiar({ disparador: { tipo: "producto", valor: String(p.id) } })} />)
-          : <select value={d.valor} onChange={(e) => cambiar({ disparador: { tipo: d.tipo, valor: e.target.value } })}>
-            <option value="">Elegir…</option>
-            {opciones.map((x) => <option key={x}>{x}</option>)}
-            {d.valor && !opciones.includes(d.valor) && <option>{d.valor}</option>}
-          </select>}
-      </div>
-    </div>
-    {d.valor && <details className="metrica">
-      <summary>{cs.length} productos coinciden con el disparador</summary>
-      {cs.length > 0 ? <ul>{cs.map((p) => <li key={p.id}>{p.nombre}</li>)}</ul> : <p>Revisá el disparador: ningún producto del catálogo coincide.</p>}
-    </details>}
-    <div className="campo">Sugerir con <span className="fila-botones"><input type="number" min="0" max="100" className="pct" value={r.descuentoPct}
-      onChange={(e) => cambiar({ descuentoPct: Number(e.target.value) })} /> % de descuento</span></div>
-    <div className="sugeridos">
-      {r.sugeridos.map((id) => <span key={id} className="chip">
-        {porId.get(String(id))?.nombre || `#${id} (no está en el catálogo)`}
-        <button onClick={() => cambiar({ sugeridos: r.sugeridos.filter((x) => x !== id) })}>×</button>
-      </span>)}
-      <SelectorProducto productos={productos} excluir={r.sugeridos} onElegir={(p) => cambiar({ sugeridos: [...r.sugeridos, String(p.id)] })} />
-    </div>
-    <label className="campo">Frase para el vendedor
-      <textarea rows="2" placeholder="¿Tenés la funda para protegerlo y transportarlo?" value={r.mensaje || ""} onChange={(e) => cambiar({ mensaje: e.target.value })} />
-    </label>
-    {(m || o) && <p className="metrica">
-      {m && <>Mostrador: mostrada {m.mostradas} veces · aceptada {m.aceptadas}{tasa(m.aceptadas, m.mostradas)} · {m.ventas ?? 0} ventas completadas · vendido {pesos(m.ingresos)}</>}
-      {m && o && <br />}
-      {o && <>Online: mostrada {o.shown} veces · aceptada {o.accepted}{tasa(o.accepted, o.shown)} · vendida {o.sold} · vendido {pesos(o.revenue)}</>}
-    </p>}
-  </div>;
 }

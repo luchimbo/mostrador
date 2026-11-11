@@ -5,6 +5,10 @@ export async function responseJson(response, service = "El servidor") {
   catch {
     throw new Error(`${service} devolvió una respuesta no válida (HTTP ${response.status}). Volvé a intentar; si persiste, revisá la versión del servidor.`);
   }
-  if (!response.ok) throw new Error(`${data?.error || `${service} no pudo procesar la solicitud`} (HTTP ${response.status})`);
+  if (!response.ok) {
+    const error = new Error(`${data?.error || `${service} no pudo procesar la solicitud`} (HTTP ${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }

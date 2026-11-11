@@ -62,7 +62,7 @@ export function createOnlinePublisher({ connection, read, write, source, fetchIm
   async function remoteStatus() {
     if (!configured) return status();
     const remote = await request("GET");
-    await write(DOCUMENT, { ...state(), remote });
+    await write(DOCUMENT, { ...state(), remote, error: null });
     return status();
   }
   // Módulo «Completá tu equipo» en la tienda: misma conexión firmada que la publicación.

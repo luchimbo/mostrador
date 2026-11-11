@@ -23,24 +23,28 @@ const clave = (name) => name.replace(/\.jsonl?$/, "");
 
 // Con PostgreSQL los documentos se leen al arrancar y quedan en memoria: un cambio hecho a mano
 // en la base se ve recién al reiniciar el servidor.
-export function readJson(name, fallback) {
+export function readJson(name, fallback, { estricto = false } = {}) {
   if (db) return db.documentos.has(clave(name)) ? structuredClone(db.documentos.get(clave(name))) : fallback;
   try {
     return JSON.parse(fs.readFileSync(file(name), "utf8"));
-  } catch {
+  } catch (error) {
+    if (estricto && error.code !== "ENOENT") throw error;
     return fallback;
   }
 }
 
 export async function writeJson(name, value) {
   if (db) {
-    db.documentos.set(clave(name), structuredClone(value));
     await db.guardarDocumento(clave(name), value);
+    db.documentos.set(clave(name), structuredClone(value));
     return;
   }
-  const target = file(name);
+  escribirAtomico(file(name), JSON.stringify(value, null, 2));
+}
+
+function escribirAtomico(target, contenido) {
   const tmp = `${target}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(value, null, 2));
+  fs.writeFileSync(tmp, contenido);
   fs.renameSync(tmp, target);
 }
 
@@ -49,12 +53,24 @@ export function guardarCopia(name, value) {
   return writeJson(name, value).catch((err) => console.error(`[datos] no se pudo guardar ${name}:`, err.message));
 }
 
-export async function appendLog(name, entry) {
-  if (db) await db.agregar(clave(name), entry);
-  else fs.appendFileSync(file(name), JSON.stringify(entry) + "\n");
+export async function appendLog(name, entry, uid) {
+  if (db) return db.agregar(clave(name), entry, uid);
+  const linea = JSON.stringify(entry) + "\n";
+  const target = file(name);
+  if (!uid) return fs.appendFileSync(target, linea);
+
+  // Los registros recuperables quedan completos o conservan el archivo anterior.
+  let anterior = "";
+  try {
+    anterior = fs.readFileSync(target, "utf8");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  const separador = anterior && !anterior.endsWith("\n") ? "\n" : "";
+  escribirAtomico(target, anterior + separador + linea);
 }
 
-export async function readLog(name) {
+export async function readLog(name, { estricto = false } = {}) {
   if (db) return db.leer(clave(name));
   try {
     return fs
@@ -62,12 +78,14 @@ export async function readLog(name) {
       .split("\n")
       .filter(Boolean)
       .map((line) => JSON.parse(line));
-  } catch {
+  } catch (error) {
+    if (estricto && error.code !== "ENOENT") throw error;
     return [];
   }
 }
 
 export const DEFAULT_SETTINGS = {
+  descuentoGeneralPct: 10,
   descuentoContadoPct: 5, // efectivo o transferencia
   descuentoMaximoPct: 25, // tope para cualquier descuento de recomendación
   margenMinimoPct: 10, // el precio con descuento nunca baja de costo + este %
@@ -89,6 +107,7 @@ export function getSettings() {
 
 export async function saveSettings(partial) {
   const next = { ...getSettings(), ...partial };
+  if (!Number.isFinite(next.descuentoGeneralPct) || next.descuentoGeneralPct < 0 || next.descuentoGeneralPct > 100) throw new Error("El descuento general debe estar entre 0 y 100.");
   if (typeof next.crossSellingMostrador !== "boolean" || typeof next.mostrarOpinion !== "boolean") throw new Error("Los interruptores de ajustes no son válidos.");
   validarPantalla(next);
   await writeJson("ajustes.json", next);

@@ -1,17 +1,20 @@
+import crypto from 'node:crypto';
 // Estado de la venta en curso. El servidor es la única fuente de verdad:
 // la pantalla del vendedor manda acciones y ambas pantallas reciben el mismo estado.
 import { calcularLinea, calcularTotales, descuentoSeguro, marcarCrossSelling, METODOS_PAGO } from "./pricing.js";
-import { obtenerSugerencias, reglaSeDispara } from "./recommendations.js";
+import { obtenerSugerencias, reglaSeDispara, descuentoRegla } from "../shared/recommendations.js";
 import { comprobanteEmitido } from "./cobranza.js";
 
 let nextLineId = 1;
 
 export class Sale {
-  constructor() {
+  constructor(onEvent = () => {}) {
+    this.onEvent = onEvent;
     this.reset();
   }
 
   reset() {
+    this.sessionId = crypto.randomUUID();
     this.lines = [];
     this.metodoPago = null;
     this.sinFactura = false; // efectivo sin factura: se registra como cotización
@@ -20,9 +23,36 @@ export class Sale {
     this.cliente = null; // { nombre, documento } a mostrar
     this.factura = null;
     this.error = null;
+    this.operacion = null;
+    this.totalesEmitidos = null;
+    this.recuperada = false;
     this.comprobantePendiente = null;
     this.sugerenciasMostradas = new Set();
     this.inicio = null;
+  }
+
+  persistible() {
+    const { onEvent, sugerenciasMostradas, ...datos } = this;
+    return structuredClone({ ...datos, sugerenciasMostradas: [...sugerenciasMostradas] });
+  }
+
+  restaurar(datos) {
+    const { sugerenciasMostradas = [], ...estado } = datos;
+    Object.assign(this, estado);
+    this.sugerenciasMostradas = new Set(sugerenciasMostradas);
+    nextLineId = this.lines.reduce((max, linea) => Math.max(max, Number(linea.lineId) + 1), nextLineId);
+  }
+
+  actualizarProductos(productos) {
+    if (this.fase !== "venta") return;
+    for (const linea of this.lines) {
+      const producto = productos.get(String(linea.productId));
+      linea.noDisponible = !producto || producto.activo === false;
+      if (linea.noDisponible) continue;
+      for (const campo of ["precioFinal", "iva", "nombre", "nombreFactura", "codigo", "imagen"]) {
+        if (producto[campo] != null) linea[campo] = producto[campo];
+      }
+    }
   }
 
   agregar(product, { reglaId = null } = {}) {
@@ -45,6 +75,7 @@ export class Sale {
       descuentoPct: 0,
       crossSelling: null, // null = automático (todo lo que no es el más caro)
     });
+    if (reglaId) this.onEvent({tipo:'agregada',sessionId:this.sessionId,productId:String(product.id),reglaId});
     this.fase = "venta";
     this.inicio ??= new Date().toISOString();
     this.error = null;
@@ -53,7 +84,8 @@ export class Sale {
   cambiarCantidad(lineId, cantidad) {
     const line = this.lines.find((l) => l.lineId === lineId);
     if (!line) return;
-    if (cantidad <= 0) this.quitar(lineId);
+    if (!Number.isSafeInteger(cantidad) || cantidad < 0) throw new Error("Ingresá una cantidad entera válida.");
+    if (cantidad === 0) this.quitar(lineId);
     else line.cantidad = Math.floor(cantidad);
   }
 
@@ -65,6 +97,8 @@ export class Sale {
   }
 
   quitar(lineId) {
+    const retirada=this.lines.find(l=>l.lineId===lineId);
+    if(retirada?.reglaId)this.onEvent({tipo:'retirada',sessionId:this.sessionId,productId:String(retirada.productId),reglaId:retirada.reglaId});
     this.lines = this.lines.filter((l) => l.lineId !== lineId);
     if (this.lines.length === 0 && this.fase === "venta") this.reset();
   }
@@ -94,16 +128,20 @@ export class Sale {
       if (!line.reglaId) continue;
       const regla = reglasPorId.get(line.reglaId);
       const product = productsById.get(String(line.productId));
-      const activa = regla && product && reglaSeDispara(regla, this.lines, productsById, line.lineId);
-      line.descuentoPct = activa ? descuentoSeguro(product, regla.descuentoPct, settings) : 0;
+      const activa = line.precioOriginal == null && regla && product && reglaSeDispara(regla, this.lines, productsById, line.lineId);
+      line.descuentoPct = activa ? descuentoSeguro(product, descuentoRegla(regla, line.productId, settings), settings) : 0;
     }
   }
 
   snapshot(productsById, reglas, settings) {
-    this.recalcular(productsById, reglas, settings);
+    if (this.fase === "venta") this.recalcular(productsById, reglas, settings);
     const sugerencias =
       this.fase === "venta" && settings.crossSellingMostrador !== false ? obtenerSugerencias(this.lines, productsById, reglas, settings) : [];
-    for (const s of sugerencias) this.sugerenciasMostradas.add(`${s.reglaId}:${s.productId}`);
+    for (const s of sugerencias) {
+      const key=`${s.reglaId}:${s.productId}`;
+      if(!this.sugerenciasMostradas.has(key))this.onEvent({tipo:'mostrada',sessionId:this.sessionId,productId:String(s.productId),reglaId:s.reglaId,reglaNombre:reglas.find(r=>r.id===s.reglaId)?.nombre,condiciones:s});
+      this.sugerenciasMostradas.add(key);
+    }
     return {
       fase: this.fase,
       lines: marcarCrossSelling(this.lines.map((l) => ({ ...l, ...calcularLinea(l), recomendado: Boolean(l.reglaId), crossSellingManual: typeof l.crossSelling === "boolean" }))),
@@ -115,11 +153,13 @@ export class Sale {
       cliente: this.cliente,
       factura: this.factura,
       error: this.error,
+      recuperada: this.recuperada,
+      revision: this.fase === "revision" ? { id: this.factura?.idComprobante ?? this.comprobantePendiente, numero: this.factura?.numero } : null,
     };
   }
 
   totales(settings) {
-    const t = calcularTotales(this.lines, this.metodoPago, settings, { transferencia: this.transferencia });
+    const t = this.totalesEmitidos ? { ...this.totalesEmitidos } : calcularTotales(this.lines, this.metodoPago, settings, { transferencia: this.transferencia });
     if (comprobanteEmitido(this.factura)) t.totalAPagar = this.factura.total;
     return t;
   }

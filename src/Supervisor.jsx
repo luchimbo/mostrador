@@ -7,6 +7,7 @@ const FASES = {
   idle: "Esperando una venta",
   venta: "Venta en curso",
   facturando: "Emitiendo comprobante",
+  revision: "Operación pendiente de verificar",
   cobranza: "Cobranza pendiente",
   cobrando: "Registrando cobranza",
   gracias: "Venta finalizada",
@@ -47,6 +48,7 @@ export default function Supervisor() {
                 <div className="linea-info">
                   <strong>{linea.nombre}</strong>
                   <span className="detalle">{linea.cantidad} × {pesos(linea.precioFinal)}
+                    {linea.precioOriginal != null && <span className="badge gris">precio modificado (antes {pesos(linea.precioOriginal)})</span>}
                     {linea.descuentoPct > 0 && <span className="badge">−{linea.descuentoPct}% recomendado</span>}
                     {linea.crossSelling && <span className="badge gris">cross-selling</span>}
                   </span>

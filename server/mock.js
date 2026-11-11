@@ -67,6 +67,14 @@ const CLIENTES_DEMO = [
 let nextClienteId = 100;
 let nextNumero = 1;
 const comprobantesPrueba = new Map();
+let persistirComprobantes = async () => {};
+
+export function configurarComprobantesPrueba(registros, persistir, ultimoId = 0) {
+  for (const [id, comprobante] of registros) comprobantesPrueba.set(id, comprobante);
+  for (const id of comprobantesPrueba.keys()) ultimoId = Math.max(ultimoId, id);
+  nextNumero = Math.max(1, ultimoId - 900000 + 1);
+  persistirComprobantes = () => persistir([...comprobantesPrueba]);
+}
 
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -95,12 +103,18 @@ export async function crearCliente(datos) {
   return cliente.Id;
 }
 
-export async function emitirFactura(payload) {
+export async function emitirFactura(payload, cobrada = false) {
   await esperar(1500);
   const numero = String(nextNumero++).padStart(8, "0");
   const cae = `PRUEBA${Date.now()}`.slice(0, 14);
   const total = payload.Items.reduce((sum, l) => sum + l.Cantidad * l.PrecioUnitario * (1 + l.Iva / 100) * (1 - l.Bonificacion / 100), 0);
-  comprobantesPrueba.set(900000 + Number(numero), { Cae: cae, ImporteTotalNeto: Math.round(total * 100) / 100, Saldo: Math.round(total * 100) / 100 });
+  comprobantesPrueba.set(900000 + Number(numero), {
+    Cae: cae, TipoFc: payload.TipoFc, IdCliente: payload.IdCliente,
+    Numero: `${payload.TipoFc === "FCA" ? "A" : "B"}-0099-${numero}`,
+    ImporteTotalNeto: Math.round(total * 100) / 100,
+    Saldo: cobrada ? 0 : Math.round(total * 100) / 100,
+  });
+  await persistirComprobantes();
   return {
     idComprobante: 900000 + Number(numero),
     cae,
@@ -112,16 +126,20 @@ export async function emitirFactura(payload) {
   };
 }
 
-export const emitirFacturaCobrada = emitirFactura;
+export const emitirFacturaCobrada = (payload) => emitirFactura(payload, true);
 export async function emitirCotizacion(payload) {
   await esperar(800);
   const numero = String(nextNumero++).padStart(8, "0");
   const total = Math.round(payload.Items.reduce((sum, l) => sum + l.Cantidad * l.PrecioUnitario * (1 + l.Iva / 100) * (1 - l.Bonificacion / 100), 0) * 100) / 100;
-  comprobantesPrueba.set(900000 + Number(numero), { TipoFc: payload.TipoFc, ImporteTotalNeto: total, Saldo: total });
+  comprobantesPrueba.set(900000 + Number(numero), { TipoFc: payload.TipoFc, IdCliente: payload.IdCliente, Numero: `COT-0099-${numero}`, ImporteTotalNeto: total, Saldo: total });
+  await persistirComprobantes();
   return { idComprobante: 900000 + Number(numero), numero: `COT-0099-${numero}`, url: "", total };
 }
 export async function obtenerConfiguracionFacturacion(metodo) {
   return { condicionVenta: metodo === "mercadopago" ? "MercadoPago" : metodo === "otros" ? "Otro" : "Efectivo", automatico: metodo === "mercadopago" };
 }
 export async function consultarComprobante(id) { return comprobantesPrueba.get(id); }
-export async function cobrarComprobante(payload) { comprobantesPrueba.get(payload.Id).Saldo = 0; }
+export async function cobrarComprobante(payload) {
+  comprobantesPrueba.get(payload.Id).Saldo = 0;
+  await persistirComprobantes();
+}

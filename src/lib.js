@@ -37,7 +37,10 @@ export function useEstado() {
 }
 
 export function accion(tipo, datos = {}) {
-  return new Promise((resolve) => socket.emit("accion", { tipo, ...datos }, resolve));
+  if (!socket.connected) return Promise.resolve({ ok: false, error: "Sin conexión con el servidor del mostrador." });
+  return new Promise(resolve => socket.timeout(120_000).emit("accion", { tipo, ...datos }, (error, resultado) => {
+    resolve(error ? { ok: false, error: "No se recibió confirmación. Revisá el estado del ticket antes de volver a intentar." } : resultado);
+  }));
 }
 
 const formato = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 2 });

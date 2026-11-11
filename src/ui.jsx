@@ -52,7 +52,7 @@ export function SelectorProducto({ productos, onElegir, excluir = [], placeholde
     : [];
   return (
     <div className="selector">
-      <input placeholder={placeholder} value={texto} onChange={(e) => setTexto(e.target.value)} />
+      <input aria-label={placeholder} placeholder={placeholder} value={texto} onChange={(e) => setTexto(e.target.value)} />
       {resultados.length > 0 && (
         <ul>
           {resultados.map((p) => (

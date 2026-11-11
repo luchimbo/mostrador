@@ -4,7 +4,7 @@
 import crypto from "node:crypto";
 import pg from "pg";
 
-const TABLAS = { ventas: "ventas", cobranzas: "cobranzas", "facturas-pendientes": "facturas_pendientes" };
+const TABLAS = { "recomendaciones-eventos": "recomendaciones_eventos", ventas: "ventas", cobranzas: "cobranzas", "facturas-pendientes": "facturas_pendientes" };
 
 const ESQUEMA = `
   create table if not exists documentos (

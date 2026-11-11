@@ -18,6 +18,17 @@ const tnProducts = products.map((p, i) => ({ id: i + 10, name: { es: p.nombre },
 const cart = { store_id: "7570182", cart_id: "cart1", currency: "ARS", execution_tier: "line_item", coupons: [], products: [{ id: "line1", variant_id: 100, quantity: 1, price: "200000" }], promotions: [] };
 const withAccessory = { ...cart, products: [...cart.products, { id: "line2", variant_id: 101, quantity: 2, price: "12100" }], promotions: [{ id: "promo1", line_items: ["line2"] }] };
 const accepted = { storeId: "7570182", cartId: "cart1", revision: "v1", ruleId: "r1", variantId: "101", expiresAt: now.getTime() + 10000 };
+test("online conserva descuentos por producto y acepta snapshots anteriores", () => {
+  const snapshot = make({ rules: [{ ...rules[0], descuentosPorProducto: { "2": 0, "3": 20 } }], settings: { ...settings, descuentoGeneralPct: 10 } });
+  const offers = onlineRecommendations(snapshot, mapOnlineCatalog(snapshot, tnProducts), cart);
+  assert.deepEqual(offers.map((o) => o.descuentoPct), [0, 20]);
+  const old = structuredClone(snapshot);
+  old.schemaVersion = 1; old.engineVersion = "mostrador-crossselling-1";
+  delete old.settings.descuentoGeneralPct;
+  old.rules = old.rules.map(({ descuentosPorProducto, ...rule }) => ({ ...rule, descuentoPct: 15 }));
+  assert.equal(validateSnapshot(old), old);
+  assert.deepEqual(onlineRecommendations(old, mapOnlineCatalog(old, tnProducts), cart).map((o) => o.descuentoPct), [12, 15]);
+});
 function commands(extra = {}) {
   const snapshot = make();
   return discountCommands({ snapshot, revision: "v1", catalog: mapOnlineCatalog(snapshot, tnProducts), cart: withAccessory,
@@ -146,6 +157,28 @@ test("publicación confirmada y falla posterior conservan la última versión", 
   assert.match(pub.status().error, /503/);
   assert.equal(JSON.stringify(pub.status()).includes("a".repeat(32)), false);
 });
+test("consultar estado limpia el error anterior sólo si Logitrack responde correctamente", async () => {
+  let fail = false;
+  const remote = { published: true, mappedProducts: 282 };
+  const pub = publisher(async (_url, options) => {
+    if (fail) return { ok: false, status: 502 };
+    return { ok: true, json: async () => options.method === "PUT"
+      ? { revision: JSON.parse(options.body).revision } : remote };
+  });
+  const published = await pub.publish();
+  fail = true;
+  await assert.rejects(pub.publish(), /HTTP 502/);
+  await assert.rejects(pub.remoteStatus(), /HTTP 502/);
+  assert.match(pub.status().error, /HTTP 502/);
+  fail = false;
+  const recovered = await pub.remoteStatus();
+  assert.equal(recovered.error, null);
+  assert.equal(pub.status().error, null);
+  assert.deepEqual(recovered.remote, remote);
+  assert.equal(recovered.lastPublishedAt, published.lastPublishedAt);
+  assert.equal(recovered.lastRevision, published.lastRevision);
+});
+
 test("publicación simultánea se serializa y publica cambios pendientes", async () => {
   let release, calls = 0;
   const barrier = new Promise((r) => { release = r; });

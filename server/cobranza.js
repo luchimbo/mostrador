@@ -40,8 +40,12 @@ export async function registrarCobranza({ factura, pagos, destinos, backend, ant
   const total = importeContabilium(actual.ImporteTotalNeto);
   const saldo = importeContabilium(actual.Saldo);
   if (Math.round(total * 100) !== Math.round(factura.total * 100)) throw new Error("El total de Contabilium difiere del mostrador. Revisá la factura antes de cobrar.");
-  if (Math.round(saldo * 100) !== Math.round(total * 100)) throw new Error("La factura ya tiene una cobranza total o parcial en Contabilium. Revisala allí para evitar reemplazar el recibo.");
-  await antesDeEnviar();
+  if (Math.round(saldo * 100) !== Math.round(total * 100)) {
+    const error = new Error("La factura ya tiene una cobranza total o parcial en Contabilium. Revisala allí para evitar reemplazar el recibo.");
+    error.revisarSaldo = true;
+    throw error;
+  }
+  await antesDeEnviar(payload);
   try {
     await backend.cobrarComprobante(payload);
   } catch (err) {
